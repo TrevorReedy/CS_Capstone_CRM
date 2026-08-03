@@ -16,6 +16,38 @@ class InventoryService
     }
 
     /**
+     * Run $work inside a single database transaction.
+     *
+     * Every write path here touches more than one table — products + inventory
+     * + the movements ledger — and each was issued as an independent statement.
+     * A failure partway through left a product with no inventory row, or stock
+     * that disagreed with the ledger that is supposed to audit it. Nested calls
+     * join the outer transaction rather than opening a second one.
+     *
+     * @template T
+     * @param callable():T $work
+     * @return T
+     */
+    private function transactional(callable $work): mixed
+    {
+        $db = \App\Core\Database::connection();
+
+        if ($db->inTransaction()) {
+            return $work();
+        }
+
+        $db->beginTransaction();
+        try {
+            $result = $work();
+            $db->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
      * Get the product list, optionally searched/filtered/sorted, with a
      * computed 'low_stock' flag (available_quantity below that product's own
      * low_stock_threshold) added to each row for the view.
@@ -75,10 +107,13 @@ class InventoryService
             throw new \InvalidArgumentException("SKU \"{$sku}\" is already in use by another product.");
         }
 
-        $productId = $this->repo->create($productName, $sku, $price, $description, $startingQuantity, $lowStockThreshold);
-        $this->repo->logMovement($productId, $userId, 'created', $startingQuantity, 'Product created.');
+        // products + inventory + ledger must land together or not at all.
+        return $this->transactional(function () use ($productName, $sku, $price, $description, $startingQuantity, $lowStockThreshold, $userId) {
+            $productId = $this->repo->create($productName, $sku, $price, $description, $startingQuantity, $lowStockThreshold);
+            $this->repo->logMovement($productId, $userId, 'created', $startingQuantity, 'Product created.');
 
-        return $productId;
+            return $productId;
+        });
     }
 
     /**
@@ -103,11 +138,13 @@ class InventoryService
             throw new \InvalidArgumentException("SKU \"{$sku}\" is already in use by another product.");
         }
 
-        $result = $this->repo->updateProduct($id, $productName, $sku, $price, $description);
-        $this->repo->updateLowStockThreshold($id, $lowStockThreshold);
-        $this->repo->logMovement($id, $userId, 'updated', null, 'Product details updated (name, SKU, price, description, and/or low stock threshold).');
+        return $this->transactional(function () use ($id, $productName, $sku, $price, $description, $lowStockThreshold, $userId) {
+            $result = $this->repo->updateProduct($id, $productName, $sku, $price, $description);
+            $this->repo->updateLowStockThreshold($id, $lowStockThreshold);
+            $this->repo->logMovement($id, $userId, 'updated', null, 'Product details updated (name, SKU, price, description, and/or low stock threshold).');
 
-        return $result;
+            return $result;
+        });
     }
 
     /**
@@ -123,13 +160,15 @@ class InventoryService
             throw new \InvalidArgumentException('Available quantity cannot be negative.');
         }
 
-        $before = $this->repo->findById($productId);
-        $delta  = $before !== null ? $availableQuantity - (int) $before['available_quantity'] : null;
+        return $this->transactional(function () use ($productId, $availableQuantity, $userId) {
+            $before = $this->repo->findById($productId);
+            $delta  = $before !== null ? $availableQuantity - (int) $before['available_quantity'] : null;
 
-        $result = $this->repo->updateAvailableQuantity($productId, $availableQuantity);
-        $this->repo->logMovement($productId, $userId, 'manual_adjustment', $delta, 'Manual stock adjustment.');
+            $result = $this->repo->updateAvailableQuantity($productId, $availableQuantity);
+            $this->repo->logMovement($productId, $userId, 'manual_adjustment', $delta, 'Manual stock adjustment.');
 
-        return $result;
+            return $result;
+        });
     }
 
     /**

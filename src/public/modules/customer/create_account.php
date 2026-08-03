@@ -2,12 +2,21 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Modules\Customer\CustomerRepository;
 
 Auth::requireLogin();
 
 // Reject state-changing (POST) requests without a valid CSRF token.
 require_once __DIR__ . '/../../../app/Middleware/csrf.php';
+
+// This page creates either an account or a contact. Reaching the form needs one
+// of the two; the POST branch below re-checks the specific one for the submitted
+// entity_type, so holding only customers.create can't be used to insert contacts.
+if (!Permissions::can('customers.create') && !Permissions::can('contacts.create')) {
+    layout_deny();
+    exit;
+}
 
 $repo     = new CustomerRepository();
 $accounts = $repo->all();   // for the contact → account picker
@@ -17,6 +26,14 @@ $input     = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $entityType = $_POST['entity_type'] ?? '';
+
+    // Per-entity authorization: the page-level check above only proves the user
+    // may create one of the two kinds.
+    $needed = $entityType === 'contact' ? 'contacts.create' : 'customers.create';
+    if (!Permissions::can($needed)) {
+        layout_deny();
+        exit;
+    }
 
     // Capture everything for re-populating the form on a validation error.
     $input = [

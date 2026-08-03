@@ -31,11 +31,34 @@ final class Exporter
         fputcsv($out, array_values($columns));
         foreach ($rows as $row) {
             fputcsv($out, array_map(
-                static fn($key) => (string)($row[$key] ?? ''),
+                static fn($key) => self::safeCell($row[$key] ?? ''),
                 array_keys($columns)
             ));
         }
         fclose($out);
+    }
+
+    /**
+     * Neutralize spreadsheet formula injection.
+     *
+     * fputcsv quotes correctly for CSV, but quoting is not the threat here:
+     * Excel and Sheets evaluate any cell whose text begins with =, +, - or @.
+     * A customer named `=HYPERLINK("http://evil","Click")` — or the classic
+     * `=cmd|'/c calc'!A0` — becomes live content the moment a colleague opens
+     * the export. A leading apostrophe forces the cell to be read as text; the
+     * spreadsheet does not display it.
+     */
+    private static function safeCell(mixed $value): string
+    {
+        $cell = (string)$value;
+
+        // Tab and CR are included because they are stripped before evaluation,
+        // so they can be used to hide the trigger character.
+        if ($cell !== '' && str_contains("=+-@\t\r", $cell[0])) {
+            return "'" . $cell;
+        }
+
+        return $cell;
     }
 
     public static function xml(array $columns, array $rows, string $filename, string $root = 'rows', string $item = 'row'): void

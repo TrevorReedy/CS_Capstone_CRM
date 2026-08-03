@@ -192,7 +192,12 @@ class AdminController
                 'role_id' => $roleId,
             ]);
         } catch (\Throwable $e) {
-            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Failed to create custom role: ' . $e->getMessage()];
+            // Was concatenating the raw message, which surfaced PDO/SQL text in
+            // the UI. Log it, show the user a reference instead.
+            $_SESSION['flash'] = [
+                'type'    => 'error',
+                'message' => \App\Core\ErrorResponse::flash($e, 'create the custom role', 'AdminController::assignCustomRole'),
+            ];
             header('Location: /admin/users.php?action=edit&id=' . $userId);
             exit;
         }

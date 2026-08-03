@@ -5,6 +5,7 @@
 require_once __DIR__ . '/../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\ErrorResponse;
 use App\Core\Permissions;
 use App\Core\Csrf;
 use App\Modules\Admin\UserRepository;
@@ -63,6 +64,6 @@ try {
 
     echo json_encode($response);
 } catch (Throwable $e) {
-    http_response_code(500);
-    echo json_encode(['error' => true, 'message' => $e->getMessage()]);
+    // Never echo the PDO message: it leaks schema and SQL to the client.
+    ErrorResponse::json($e, 'users_data.php');
 }

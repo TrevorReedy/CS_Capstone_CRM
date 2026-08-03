@@ -159,10 +159,17 @@ class InventoryController
                 'type'    => 'success',
                 'message' => "\"{$name}\" was deleted successfully.",
             ];
-        } catch (\Exception $e) {
+        } catch (\InvalidArgumentException | \DomainException $e) {
+            // Deliberate business-rule messages ("still has active reservations").
             $_SESSION['flash'] = [
                 'type'    => 'error',
                 'message' => $e->getMessage(),
+            ];
+        } catch (\Throwable $e) {
+            // Anything else (PDO, etc.) must not reach the browser verbatim.
+            $_SESSION['flash'] = [
+                'type'    => 'error',
+                'message' => \App\Core\ErrorResponse::flash($e, 'delete the product', 'InventoryController::delete'),
             ];
         }
 
@@ -203,8 +210,16 @@ class InventoryController
             }
             header('Location: /modules/inventory/products.php?page=reservations');
             exit;
-        } catch (\Exception $e) {
+        } catch (\InvalidArgumentException | \DomainException $e) {
+            // Deliberate business-rule messages ("Unknown action.").
             $_SESSION['flash'] = ['type' => 'error', 'message' => $e->getMessage()];
+            header('Location: /modules/inventory/products.php?page=reservations');
+            exit;
+        } catch (\Throwable $e) {
+            $_SESSION['flash'] = [
+                'type'    => 'error',
+                'message' => \App\Core\ErrorResponse::flash($e, 'update the reservation', 'InventoryController::updateReservation'),
+            ];
             header('Location: /modules/inventory/products.php?page=reservations');
             exit;
         }

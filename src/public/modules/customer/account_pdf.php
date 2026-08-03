@@ -3,10 +3,16 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Core\Database;
 use App\Core\PDF\SimplePDF;
 
 Auth::requireLogin();
+
+if (!Permissions::can('customers.view')) {
+    layout_deny();
+    exit;
+}
 
 $accountId = $_GET['id'] ?? null;
 

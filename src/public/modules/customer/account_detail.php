@@ -3,12 +3,54 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Core\Database;
 
 Auth::requireLogin();
 
 // Reject state-changing (POST) requests without a valid CSRF token.
 require_once __DIR__ . '/../../../app/Middleware/csrf.php';
+
+// Viewing the page.
+if (!Permissions::can('customers.view')) {
+    layout_deny();
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| WRITE AUTHORIZATION
+|--------------------------------------------------------------------------
+| This page dispatches on a hidden POST marker rather than through the module
+| controller, so each write needs its own gate. Anything that posts a marker not
+| listed here is rejected outright — deny by default, so a new form can't ship
+| unprotected by accident.
+*/
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $writePermissions = [
+        'update_account'     => 'customers.edit',
+        'delete_account'     => 'customers.delete',
+        'add_contact'        => 'contacts.create',
+        'update_contact'     => 'contacts.edit',
+        'delete_contact'     => 'contacts.delete',
+        'add_interaction'    => 'interactions.create',
+        'update_interaction' => 'interactions.edit',
+        'delete_interaction' => 'interactions.delete',
+    ];
+
+    $marker = null;
+    foreach (array_keys($writePermissions) as $candidate) {
+        if (isset($_POST[$candidate])) {
+            $marker = $candidate;
+            break;
+        }
+    }
+
+    if ($marker === null || !Permissions::can($writePermissions[$marker])) {
+        layout_deny();
+        exit;
+    }
+}
 
 $accountId = (int)($_GET['id'] ?? 0);
 $editMode  = isset($_GET['edit']);
@@ -243,22 +285,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_interaction'])
 */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_account'])) {
 
+    // Contacts, interactions and campaign-audience rows all cascade from accounts
+    // (see schema.sql). This used to hand-delete interactions first, which meant a
+    // delete blocked by the RFQ foreign key had already destroyed the interaction
+    // history — with nothing to roll it back. One statement in one transaction
+    // now either removes the whole customer or leaves it untouched.
+    $db->beginTransaction();
     try {
-        // Contacts cascade automatically; interactions do not, so clear them first.
-        $db->prepare("DELETE FROM interactions WHERE account_id=:id")
-           ->execute(['id' => $accountId]);
-
         $db->prepare("DELETE FROM accounts WHERE id=:id")
            ->execute(['id' => $accountId]);
 
+        $db->commit();
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Customer deleted.'];
         header("Location: accounts.php");
         exit;
 
     } catch (\PDOException $e) {
-        // Blocked by a foreign key — the account still has linked RFQs or campaigns.
+        $db->rollBack();
+        // Blocked by a foreign key — the account still has linked RFQs.
+        error_log('Account delete blocked (id ' . $accountId . '): ' . $e->getMessage());
         $_SESSION['flash'] = ['type' => 'error', 'message' =>
-            'This customer cannot be deleted because it still has linked RFQs or campaigns. '
+            'This customer cannot be deleted because it still has linked RFQs. '
             . 'Remove or reassign those first.'];
     }
 }

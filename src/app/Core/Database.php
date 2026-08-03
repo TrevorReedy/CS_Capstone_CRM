@@ -34,6 +34,12 @@ class Database
             self::$connection = new PDO($dsn, $config['username'], $config['password'], [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                // pdo_mysql emulates prepares by default, which means it builds
+                // the SQL string client-side instead of sending parameters
+                // separately. Real server-side prepares keep values out of the
+                // statement entirely, and also return ints/floats as PHP types
+                // rather than strings.
+                PDO::ATTR_EMULATE_PREPARES => false,
             ]);
         }
 

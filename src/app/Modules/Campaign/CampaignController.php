@@ -85,12 +85,8 @@ class CampaignController
     // Renders the edit form; re-populates with $this->formInput and $this->formErrors on validation failure.
     public function edit(int $id): void
     {
-    if (!Permissions::can('campaigns.edit')) {
-    http_response_code(403);
-    include __DIR__ . '/../../../app/Shared/error_403.php';
-    layout_close();
-    exit;
-}
+        // Authorization is enforced at the entry point (public/modules/campaign/edit.php)
+        // so it covers the POST path too, not just this render.
         $campaign = $this->repo->findById($id);
         if (!$campaign) {
             $_SESSION['flash'] = ['type' => 'error', 'message' => 'Campaign not found.'];
@@ -122,12 +118,29 @@ class CampaignController
         $this->audienceErrors = $this->service->validateAudienceInput($this->audienceInput);
 
         if (empty($this->audienceErrors)) {
-            // Edit mode: remove all existing rows for the old segment name before re-inserting.
+            // Edit mode replaces a segment: delete the old rows, then insert the
+            // new ones. Those are two writes, and without a transaction a failure
+            // between them left the campaign with no audience at all — the old
+            // members already gone, the new ones never added.
             $editSegment = trim($_POST['_edit_segment'] ?? '');
-            if ($editSegment !== '') {
-                $this->repo->deleteAudienceBySegment($campaignId, $editSegment);
+            $db = \App\Core\Database::connection();
+            $db->beginTransaction();
+            try {
+                if ($editSegment !== '') {
+                    $this->repo->deleteAudienceBySegment($campaignId, $editSegment);
+                }
+                $this->service->addAudienceSegment($campaignId, $this->audienceInput);
+                $db->commit();
+            } catch (\Throwable $e) {
+                $db->rollBack();
+                $_SESSION['flash'] = [
+                    'type'    => 'error',
+                    'message' => \App\Core\ErrorResponse::flash($e, 'save the audience segment', 'CampaignController::handleAudiencePost'),
+                ];
+                header('Location: /modules/campaign/audience.php?campaign_id=' . $campaignId);
+                exit;
             }
-            $this->service->addAudienceSegment($campaignId, $this->audienceInput);
+
             $msg = $editSegment !== '' ? 'Audience segment updated.' : 'Audience segment added.';
             $_SESSION['flash'] = ['type' => 'success', 'message' => $msg];
             header('Location: /modules/campaign/audience.php?campaign_id=' . $campaignId);

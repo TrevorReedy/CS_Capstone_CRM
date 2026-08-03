@@ -1,11 +1,18 @@
-CREATE DATABASE IF NOT EXISTS typhon_cath_crm;
-USE typhon_cath_crm;
+-- schema.sql — tables, primary keys, foreign keys and uniques.
+--
+-- Secondary and FULLTEXT indexes live in indexes.sql, which must be applied
+-- after this file (docker-compose mounts it as 03-indexes.sql).
+--
+-- No CREATE DATABASE / USE here on purpose: the MySQL entrypoint already
+-- selects MYSQL_DATABASE, and db_setup.php connects to the database named in
+-- config/database.php. Hardcoding `typhon_cath_crm` made DB_NAME a lie —
+-- the schema always landed in that database no matter what was configured.
 
 CREATE TABLE roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     role_name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    owner_user_id INT NULL  -- non-null = custom role scoped to one user
+    owner_user_id INT NULL  -- non-null = custom role scoped to one user; FK added after users (see bottom of file)
 );
 
 CREATE TABLE users (
@@ -59,8 +66,14 @@ CREATE TABLE interactions (
     interaction_subject TEXT NOT NULL,
     notes TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (account_id) REFERENCES accounts(id),
-    FOREIGN KEY (contact_id) REFERENCES contacts(id),
+    -- CASCADE on the account: interaction history has no meaning without the
+    -- account it belongs to, and letting the DB do it removes the hand-rolled
+    -- "delete interactions, then delete account" sequence in account_detail.php
+    -- that could lose history if the second statement failed.
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    -- SET NULL on the contact: the conversation still happened even if the
+    -- person record is gone.
+    FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -75,7 +88,10 @@ CREATE TABLE rfqs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (account_id) REFERENCES accounts(id),
-    FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+    -- SET NULL, not CASCADE: contact_id is already nullable and is only the
+    -- "who we spoke to" pointer. Cascading meant deleting one contact silently
+    -- destroyed every RFQ naming them, plus their quotes and reservations.
+    FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
     FOREIGN KEY (created_by_user_id) REFERENCES users(id)
 );
 
@@ -161,8 +177,11 @@ CREATE TABLE campaign_audience (
     tag_filter VARCHAR(255),
     segment_name VARCHAR(255),
     FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
-    FOREIGN KEY (account_id) REFERENCES accounts(id),
-    FOREIGN KEY (contact_id) REFERENCES contacts(id)
+    -- CASCADE: an audience row is nothing but "this account/contact was targeted".
+    -- Left restrictive, these FKs made customer deletion fail outright with a raw
+    -- FK error the moment the customer had ever been in a campaign audience.
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
 );
 
 CREATE TABLE role_permissions (
@@ -184,3 +203,48 @@ CREATE TABLE audience_presets (
     FOREIGN KEY (created_by_user_id) REFERENCES users(id)
 );
 
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Deferred constraints
+--
+-- Declared here rather than inline because they either close a cycle (roles ↔
+-- users) or express a domain rule that no column type can enforce on its own.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- roles.owner_user_id had no FK at all, so deleting a user left orphaned custom
+-- roles pointing at a vanished owner. Cannot be inline: roles is created before
+-- users, and users references roles.
+ALTER TABLE roles
+    ADD CONSTRAINT fk_roles_owner_user
+    FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+-- Domain invariants. The application validates these too, but the app is not the
+-- only writer (seed scripts, db_setup.php, manual SQL, Adminer), and a race
+-- between check-then-write can still land an invalid row. MySQL 8.0.16+ enforces
+-- CHECK constraints for real.
+ALTER TABLE products
+    ADD CONSTRAINT chk_products_price CHECK (price >= 0);
+
+ALTER TABLE inventory
+    ADD CONSTRAINT chk_inventory_available CHECK (available_quantity >= 0),
+    ADD CONSTRAINT chk_inventory_reserved  CHECK (reserved_quantity  >= 0),
+    ADD CONSTRAINT chk_inventory_threshold CHECK (low_stock_threshold >= 0);
+
+ALTER TABLE quotes
+    ADD CONSTRAINT chk_quotes_amount   CHECK (quote_amount >= 0),
+    ADD CONSTRAINT chk_quotes_discount CHECK (discount >= 0 AND discount <= quote_amount),
+    ADD CONSTRAINT chk_quotes_dates    CHECK (
+        validity_start_date IS NULL
+        OR validity_end_date IS NULL
+        OR validity_end_date >= validity_start_date
+    );
+
+ALTER TABLE campaigns
+    ADD CONSTRAINT chk_campaigns_sent_count CHECK (sent_count >= 0);
+
+-- A reservation of zero or fewer units is meaningless, and the same product
+-- should appear at most once per RFQ (edit the quantity instead of stacking
+-- rows, which made the reserved totals impossible to reconcile).
+ALTER TABLE rfq_inventory_reservations
+    ADD CONSTRAINT chk_reservations_quantity CHECK (quantity_reserved > 0),
+    ADD CONSTRAINT uq_reservations_rfq_product UNIQUE (rfq_id, product_id);

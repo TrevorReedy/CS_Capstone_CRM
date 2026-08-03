@@ -3,10 +3,16 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Modules\RFQ\RFQRepository;
 use App\Core\PDF\SimplePDF;
 
 Auth::requireLogin();
+
+if (!Permissions::can('rfqs.view')) {
+    layout_deny();
+    exit;
+}
 
 $id = (int)($_GET['id'] ?? 0);
 

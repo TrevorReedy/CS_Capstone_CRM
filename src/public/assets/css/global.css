@@ -125,6 +125,31 @@ h1, h2, h3, h4, h5, h6 { color: #111; font-weight: 700; }
   opacity: 0.8;
 }
 
+/* Logout is a CSRF-protected POST form, not a link — style its button to match
+   the surrounding nav items so the change is invisible to the user. */
+.app-nav-logout {
+  margin: 0;
+}
+
+.app-nav-logout-btn {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-nav-logout-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
 .app-main {
   flex: 1;
   padding: 2rem;

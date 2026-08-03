@@ -55,6 +55,33 @@ class RFQService
         if (!isset($input['quote_amount']) || !is_numeric($input['quote_amount']) || trim($input['quote_amount']) === '')
             $errors[] = 'Quote amount is required and must be a number.';
 
+        // These mirror the chk_quotes_* constraints in schema.sql. Without them
+        // the database rejects the row and the PDOException surfaces as a 500 —
+        // the constraint is the safety net, this is the actual error message.
+        $amount   = is_numeric($input['quote_amount'] ?? '') ? (float)$input['quote_amount'] : null;
+        $discount = ($input['discount'] ?? '') !== '' && is_numeric($input['discount'])
+            ? (float)$input['discount']
+            : 0.0;
+
+        if ($amount !== null && $amount < 0) {
+            $errors[] = 'Quote amount cannot be negative.';
+        }
+        if (($input['discount'] ?? '') !== '' && !is_numeric($input['discount'])) {
+            $errors[] = 'Discount must be a number.';
+        }
+        if ($discount < 0) {
+            $errors[] = 'Discount cannot be negative.';
+        }
+        if ($amount !== null && $amount >= 0 && $discount > $amount) {
+            $errors[] = 'Discount cannot be greater than the quote amount.';
+        }
+
+        $start = $input['validity_start_date'] ?? '';
+        $end   = $input['validity_end_date']   ?? '';
+        if ($start !== '' && $end !== '' && $end < $start) {
+            $errors[] = 'Validity end date cannot be before the start date.';
+        }
+
         return $errors;
     }
 

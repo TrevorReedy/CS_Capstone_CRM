@@ -2,11 +2,19 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\ErrorResponse;
+use App\Core\Permissions;
 use App\Modules\Campaign\CampaignRepository;
 
 Auth::requireLogin();
 
 header('Content-Type: application/json');
+
+if (!Permissions::can('campaigns.metrics')) {
+    http_response_code(403);
+    echo json_encode(['error' => true, 'message' => 'Forbidden']);
+    exit;
+}
 
 try {
     $validSegments = ['all', 'accounts', 'contacts'];
@@ -73,10 +81,6 @@ echo json_encode([
     'sent'          => array_values(array_map('intval', array_column($rows, 'campaigns_sent'))),
 ]);
 } catch (Throwable $e) {
-    http_response_code(500);
-
-    echo json_encode([
-        'error' => true,
-        'message' => $e->getMessage(),
-    ]);
+    // Never echo the PDO message: it leaks schema and SQL to the client.
+    ErrorResponse::json($e, 'momentum_data.php');
 }

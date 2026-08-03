@@ -6,6 +6,7 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\ErrorResponse;
 use App\Core\Permissions;
 use App\Modules\Campaign\CampaignRepository;
 
@@ -44,6 +45,6 @@ try {
 
     echo json_encode($response);
 } catch (Throwable $e) {
-    http_response_code(500);
-    echo json_encode(['error' => true, 'message' => $e->getMessage()]);
+    // Never echo the PDO message: it leaks schema and SQL to the client.
+    ErrorResponse::json($e, 'campaigns_data.php');
 }
