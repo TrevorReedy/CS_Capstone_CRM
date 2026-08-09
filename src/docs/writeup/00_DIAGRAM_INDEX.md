@@ -26,6 +26,21 @@ This folder contains Markdown specifications for diagrams that can be converted 
 12. `12_crud_matrix.md`
 13. `13_nonfunctional_quality_diagram.md`
 
+## As-built diagram (not a brief)
+
+`14_modules_and_data_model.md` is different in kind from the thirteen above.
+Those are briefs written *before* the diagram, describing what should be drawn.
+This one was generated *from the code and `database/schema.sql` as they actually
+are, so it records what was built rather than what was planned. Two pages in one
+file, `../drawio/14_modules_and_data_model.drawio`:
+
+| Page | Shows |
+|---|---|
+| 1 — Modules & Functions | The six modules as Controller / Service / Repository, with representative public methods and the counts not shown |
+| 2 — Data Model & Cardinality | All fifteen tables with crow's-foot cardinality read off the real `FOREIGN KEY` constraints |
+
+Regenerate both after a schema or module change — see that file for the command.
+
 ## Notes for draw.io conversion
 
 - Use the Mermaid starter blocks when draw.io can import Mermaid.
