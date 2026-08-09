@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two suites, deliberately separate so CI can run them as independent jobs and
+  a developer with no database can still run `composer test:unit`.
+
+    unit         — no database, no network, no session_start(). Milliseconds.
+    integration  — requires a MySQL 8 instance loaded from database/schema.sql,
+                   seed.sql and indexes.sql. See tests/IntegrationTestCase.php
+                   for the connection variables it reads.
+
+  `failOnWarning`/`failOnNotice` are on because a silently deprecated call in a
+  test is how a suite rots into meaninglessness.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="depends,defects"
+         failOnWarning="true"
+         failOnNotice="true"
+         failOnRisky="true"
+         beStrictAboutOutputDuringTests="true"
+         displayDetailsOnTestsThatTriggerWarnings="true"
+         displayDetailsOnTestsThatTriggerErrors="true">
+
+    <testsuites>
+        <testsuite name="unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory suffix=".php">app</directory>
+        </include>
+    </source>
+
+    <php>
+        <!-- Overridden by the real environment in CI; these are the Compose defaults. -->
+        <env name="DB_HOST" value="127.0.0.1" force="false"/>
+        <env name="DB_PORT" value="3306" force="false"/>
+        <env name="DB_NAME" value="typhon_cath_crm_test" force="false"/>
+        <env name="DB_USER" value="root" force="false"/>
+        <env name="DB_PASS" value="devonly_root" force="false"/>
+    </php>
+</phpunit>

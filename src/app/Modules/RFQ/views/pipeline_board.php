@@ -3,9 +3,9 @@ use App\Modules\RFQ\RFQRepository;
 ?>
 <section class="card">
     <div class="rfq-list-toolbar">
-        <div class="module-header">
+        <div class="page-header">
             <h2 class="rfq-list-title">All RFQs</h2>
-            <a href="/modules/rfq/create.php" class="rfq-create-btn" title="Create RFQ">+</a>
+            <a href="/modules/rfq/create.php" class="btn btn-primary" title="Create RFQ">+ New RFQ</a>
         </div>
     </div>
 

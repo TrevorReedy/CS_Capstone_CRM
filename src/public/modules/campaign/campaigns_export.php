@@ -17,7 +17,7 @@ if (!Permissions::can('campaigns.view')) {
 }
 
 $format = (string)($_GET['format'] ?? 'csv');
-$rows   = CampaignRepository::listTable()->allRows($_GET);
+$rows   = CampaignRepository::listTable()->exportRows($_GET);
 
 $columns = [
     'id'            => '#',
@@ -25,8 +25,6 @@ $columns = [
     'campaign_type' => 'Type',
     'status'        => 'Status',
     'sent_count'    => 'Sent',
-    'open_rate'     => 'Open Rate',
-    'click_rate'    => 'Click Rate',
     'created_at'    => 'Created',
 ];
 
@@ -36,8 +34,6 @@ $data = array_map(static fn(array $c) => [
     'campaign_type' => $c['campaign_type'],
     'status'        => $c['status'],
     'sent_count'    => (int)$c['sent_count'],
-    'open_rate'     => $c['open_rate'] !== null ? number_format((float)$c['open_rate'], 1) . '%' : '',
-    'click_rate'    => $c['click_rate'] !== null ? number_format((float)$c['click_rate'], 1) . '%' : '',
     'created_at'    => date('Y-m-d', strtotime($c['created_at'])),
 ], $rows);
 

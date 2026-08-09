@@ -200,11 +200,7 @@ class RFQController
     public function handleDeletePost(int $id): void
     {
     if (!Permissions::can('rfqs.delete')) {
-        http_response_code(403);
-        include __DIR__ . '/../../../app/Shared/header.php';
-        include __DIR__ . '/../../../app/Shared/sidebar.php';
-        include __DIR__ . '/../../../app/Shared/error_403.php';
-        include __DIR__ . '/../../../app/Shared/footer.php';
+        layout_deny();
         exit;
     }
         $this->repo->delete($id);
@@ -218,11 +214,7 @@ class RFQController
     public function handleUpdateStagePost(int $id): void
     {
     if (!Permissions::can('rfqs.update_stage')) {
-        http_response_code(403);
-        include __DIR__ . '/../../../app/Shared/header.php';
-        include __DIR__ . '/../../../app/Shared/sidebar.php';
-        include __DIR__ . '/../../../app/Shared/error_403.php';
-        include __DIR__ . '/../../../app/Shared/footer.php';
+        layout_deny();
         exit;
     }
         $stage = $_POST['stage'] ?? '';
@@ -396,7 +388,16 @@ class RFQController
             return;
         }
 
-        $this->repo->updateReservation($reservationId, $newQty);
+        try {
+            $this->repo->updateReservation($reservationId, $newQty);
+        } catch (\DomainException $e) {
+            // e.g. raising the quantity beyond what's still available.
+            $this->editResErrors = [$e->getMessage()];
+            $this->editResNewQty = $newQty;
+            $_SESSION['flash'] = ['type' => 'error', 'message' => 'Please fix the errors below.'];
+            return;
+        }
+
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Reservation updated.'];
         header('Location: /modules/rfq/edit.php?id=' . $rfqId);
         exit;
@@ -439,10 +440,16 @@ class RFQController
 
         if (empty($this->reservationErrors)) {
             $rfqId = (int)$this->reservationInput['rfq_id'];
-            $this->service->addReservation($rfqId, $this->reservationInput);
-            $_SESSION['flash'] = ['type' => 'success', 'message' => 'Inventory reservation added successfully.'];
-            header('Location: /modules/rfq/detail.php?id=' . $rfqId);
-            exit;
+            try {
+                $this->service->addReservation($rfqId, $this->reservationInput);
+                $_SESSION['flash'] = ['type' => 'success', 'message' => 'Inventory reservation added successfully.'];
+                header('Location: /modules/rfq/detail.php?id=' . $rfqId);
+                exit;
+            } catch (\DomainException $e) {
+                // Availability is re-checked under a row lock, so it can fail here
+                // even though validateReservationInput() passed a moment ago.
+                $this->reservationErrors[] = $e->getMessage();
+            }
         }
 
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Could not save reservation — please fix the errors below.'];

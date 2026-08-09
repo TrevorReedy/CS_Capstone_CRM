@@ -3,7 +3,7 @@ use App\Modules\Campaign\CampaignRepository;
 ?>
 
 <section class="card">
-    <div class="module-header">
+    <div class="page-header">
         <h1>Campaigns</h1>
         <a href="/modules/campaign/create.php" class="btn btn-primary">+ Create Campaign</a>
     </div>
@@ -18,8 +18,6 @@ use App\Modules\Campaign\CampaignRepository;
                 <th data-col="campaign_type">Type</th>
                 <th data-col="status">Status</th>
                 <th data-col="sent_count">Sent</th>
-                <th data-col="open_rate">Open Rate</th>
-                <th data-col="click_rate">Click Rate</th>
                 <th data-col="created_at">Created</th>
             </tr>
             <tr class="dt-filter">
@@ -27,8 +25,6 @@ use App\Modules\Campaign\CampaignRepository;
                 <th data-filter="text"></th>
                 <th data-filter="select" data-options='<?= htmlspecialchars(json_encode(CampaignRepository::$types), ENT_QUOTES) ?>'></th>
                 <th data-filter="select" data-options='<?= htmlspecialchars(json_encode(CampaignRepository::$statuses), ENT_QUOTES) ?>'></th>
-                <th></th>
-                <th></th>
                 <th></th>
                 <th></th>
             </tr>

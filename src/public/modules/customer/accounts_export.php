@@ -5,13 +5,19 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Modules\Customer\CustomerRepository;
 use App\Core\DataTable\Exporter;
 
 Auth::requireLogin();
 
+if (!Permissions::can('customers.view')) {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 $format = (string)($_GET['format'] ?? 'csv');
-$rows   = CustomerRepository::listTable()->allRows($_GET);
+$rows   = CustomerRepository::listTable()->exportRows($_GET);
 
 $columns = [
     'account_name' => 'Name',

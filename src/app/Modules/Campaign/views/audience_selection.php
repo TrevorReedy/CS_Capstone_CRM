@@ -1,94 +1,3 @@
-<style>
-.rfq-search-dropdown { flex: 1; }
-
-.rfq-search-results {
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-top: 2px solid var(--primary-blue);
-    border-radius: 0 0 6px 6px;
-    max-height: 220px;
-    overflow-y: auto;
-    margin-top: 1px;
-}
-
-.rfq-search-option {
-    padding: 0.55rem 0.75rem;
-    cursor: pointer;
-    font-size: 0.9rem;
-    color: #374151;
-    border-bottom: 1px solid #f3f4f6;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.rfq-search-option:last-child { border-bottom: none; }
-
-.rfq-search-option:hover,
-.rfq-search-option--focused {
-    background: #f5f9ff;
-    color: var(--primary-blue);
-}
-
-.rfq-search-option--checked {
-    background: #f0f9ff;
-    font-weight: 500;
-}
-
-.rfq-option-check {
-    width: 1rem;
-    text-align: center;
-    color: var(--primary-blue);
-    font-weight: bold;
-    flex-shrink: 0;
-}
-
-.rfq-search-option--empty {
-    padding: 0.55rem 0.75rem;
-    color: #9ca3af;
-    cursor: default;
-    font-style: italic;
-    font-size: 0.875rem;
-}
-
-.rfq-search-input--selected {
-    background: #f0f9ff;
-    border-color: var(--primary-blue) !important;
-}
-
-.audience-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 6px;
-    min-height: 0;
-}
-
-.audience-chip {
-    background: #e0f0ff;
-    color: var(--primary-blue);
-    border: 1px solid var(--primary-blue);
-    border-radius: 4px;
-    padding: 2px 6px 2px 8px;
-    font-size: 0.78rem;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.audience-chip-remove {
-    cursor: pointer;
-    font-size: 1rem;
-    line-height: 1;
-    color: var(--primary-blue);
-    border: none;
-    background: none;
-    padding: 0;
-    opacity: 0.7;
-}
-
-.audience-chip-remove:hover { opacity: 1; }
-</style>
 
 <!--
     TODO: CUSTOM AUDIENCE SEGMENTS — QUICK SELECTION
@@ -153,7 +62,7 @@ foreach ($currentAudience as $row) {
 
 <section class="card">
 
-    <div class="module-header">
+    <div class="page-header">
         <h1><?= $isEditing ? 'Edit Audience Segment' : 'Add Audience Segment' ?></h1>
         <a href="/modules/campaign/detail.php?id=<?= $campaignId ?>" class="btn btn-secondary">&#8592; Back</a>
     </div>
@@ -617,7 +526,7 @@ foreach ($currentAudience as $row) {
 <?php if (!empty($groupedAudience) || !empty($presets)): ?>
 <!-- Current audience segments — one row per segment, accounts and contacts grouped -->
 <section class="card">
-    <div class="module-header">
+    <div class="page-header">
         <h2>Current Audience Segments</h2>
         <?php if (!empty($presets)): ?>
         <button type="button" class="btn btn-secondary" id="import-preset-toggle"

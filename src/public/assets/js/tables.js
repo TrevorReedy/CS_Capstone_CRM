@@ -22,8 +22,10 @@
  *     </tr>
  *   </thead>
  *
- * Export buttons (CSV / PDF / XML) reuse DataTables' own request params so an
- * export reflects the exact global search + per-column filters + sort in effect.
+ * Export buttons (CSV / PDF / XML) reuse DataTables' own request params — search,
+ * per-column filters, sort, and the page window (start/length) — so an export
+ * contains exactly the rows on screen. Picking "All" in the length menu exports
+ * the whole filtered set.
  * Requires: jQuery, DataTables, DataTables Buttons (see datatables_assets.php).
  */
 (function ($) {

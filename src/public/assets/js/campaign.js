@@ -59,52 +59,6 @@
     function makeDatasets(metric) {
         return [
             Object.assign({ type: 'bar', yAxisID: 'y', order: 2, data: d[metric] }, barDefs[metric]),
-            {
-                type: 'line',
-                label: 'Avg Open Rate %',
-                data: d.openRate,
-                yAxisID: 'y2',
-                order: 1,
-                borderColor: '#f59e0b',
-                backgroundColor: 'rgba(245,158,11,0.10)',
-                pointBackgroundColor: '#f59e0b',
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                tension: 0.35,
-                fill: true,
-                borderWidth: 2,
-                spanGaps: true,
-            },
-            {
-                type: 'line',
-                label: 'Avg Click Rate %',
-                data: d.clickRate,
-                yAxisID: 'y2',
-                order: 1,
-                borderColor: '#1a56db',
-                backgroundColor: 'rgba(26,86,219,0.08)',
-                pointBackgroundColor: '#1a56db',
-                pointRadius: 4,
-                tension: 0.35,
-                fill: true,
-                borderWidth: 2,
-                spanGaps: true,
-            },
-            {
-                type: 'line',
-                label: 'Open-to-Click Gap %',
-                data: d.engagementGap,
-                yAxisID: 'y2',
-                order: 1,
-                borderColor: '#dc2626',
-                backgroundColor: 'rgba(220,38,38,0.08)',
-                pointBackgroundColor: '#dc2626',
-                pointRadius: 4,
-                tension: 0.35,
-                fill: false,
-                borderWidth: 2,
-                spanGaps: true,
-            }
         ];
     }
 
@@ -139,15 +93,6 @@
                 title: { display: true, text: 'Volume', font: { size: 11 }, color: '#6b7280' },
                 ticks: { precision: 0, font: { size: 11 } },
                 grid: { color: 'rgba(0,0,0,0.06)' }
-            },
-            y2: {
-                beginAtZero: true,
-                position: 'right',
-                min: 0,
-                max: 100,
-                title: { display: true, text: 'Rate %', font: { size: 11 }, color: '#6b7280' },
-                ticks: { callback: function (v) { return v + '%'; }, font: { size: 11 } },
-                grid: { drawOnChartArea: false }
             }
         }
     };

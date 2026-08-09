@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Modules\Campaign\CampaignRepository;
 
 Auth::requireLogin();
@@ -10,6 +11,13 @@ Auth::requireLogin();
 require_once __DIR__ . '/../../../app/Middleware/csrf.php';
 
 header('Content-Type: application/json');
+
+// JSON endpoint — deny in JSON, not with the HTML 403 page.
+if (!Permissions::can('campaigns.edit')) {
+    http_response_code(403);
+    echo json_encode(['error' => true, 'message' => 'Forbidden']);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['error' => 'POST required']);

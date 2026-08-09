@@ -1,5 +1,5 @@
 <section class="card">
-    <div class="rfq-board-header">
+    <div class="page-header">
         <h1>Delete Product</h1>
         <a href="/modules/inventory/products.php?page=detail&id=<?= (int)$product['id'] ?>" class="btn rfq-list-clear-btn">&#8592; Cancel</a>
     </div>

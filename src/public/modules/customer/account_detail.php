@@ -3,12 +3,54 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Core\Database;
 
 Auth::requireLogin();
 
 // Reject state-changing (POST) requests without a valid CSRF token.
 require_once __DIR__ . '/../../../app/Middleware/csrf.php';
+
+// Viewing the page.
+if (!Permissions::can('customers.view')) {
+    layout_deny();
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| WRITE AUTHORIZATION
+|--------------------------------------------------------------------------
+| This page dispatches on a hidden POST marker rather than through the module
+| controller, so each write needs its own gate. Anything that posts a marker not
+| listed here is rejected outright — deny by default, so a new form can't ship
+| unprotected by accident.
+*/
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $writePermissions = [
+        'update_account'     => 'customers.edit',
+        'delete_account'     => 'customers.delete',
+        'add_contact'        => 'contacts.create',
+        'update_contact'     => 'contacts.edit',
+        'delete_contact'     => 'contacts.delete',
+        'add_interaction'    => 'interactions.create',
+        'update_interaction' => 'interactions.edit',
+        'delete_interaction' => 'interactions.delete',
+    ];
+
+    $marker = null;
+    foreach (array_keys($writePermissions) as $candidate) {
+        if (isset($_POST[$candidate])) {
+            $marker = $candidate;
+            break;
+        }
+    }
+
+    if ($marker === null || !Permissions::can($writePermissions[$marker])) {
+        layout_deny();
+        exit;
+    }
+}
 
 $accountId = (int)($_GET['id'] ?? 0);
 $editMode  = isset($_GET['edit']);
@@ -176,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_interaction'])) {
     $stmt->execute([
         'account_id' => $accountId,
         'user_id' => $_SESSION['user']['id'],
-        'interaction_type' => $_POST['interaction_type'] ?? '',
+        'interaction_type' => strtolower(trim($_POST['interaction_type'] ?? '')), // match ENUM('call','email','note','meeting')
         'interaction_subject' => $_POST['subject'] ?? '',
         'notes' => $_POST['notes'] ?? ''
     ]);
@@ -202,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_interaction'])
     ");
 
     $stmt->execute([
-        'type' => $_POST['interaction_type'],
+        'type' => strtolower(trim($_POST['interaction_type'])), // match ENUM casing
         'subject' => $_POST['subject'],
         'notes' => $_POST['notes'],
         'id' => $_POST['interaction_id'],
@@ -243,22 +285,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_interaction'])
 */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_account'])) {
 
+    // Contacts, interactions and campaign-audience rows all cascade from accounts
+    // (see schema.sql). This used to hand-delete interactions first, which meant a
+    // delete blocked by the RFQ foreign key had already destroyed the interaction
+    // history — with nothing to roll it back. One statement in one transaction
+    // now either removes the whole customer or leaves it untouched.
+    $db->beginTransaction();
     try {
-        // Contacts cascade automatically; interactions do not, so clear them first.
-        $db->prepare("DELETE FROM interactions WHERE account_id=:id")
-           ->execute(['id' => $accountId]);
-
         $db->prepare("DELETE FROM accounts WHERE id=:id")
            ->execute(['id' => $accountId]);
 
+        $db->commit();
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Customer deleted.'];
         header("Location: accounts.php");
         exit;
 
     } catch (\PDOException $e) {
-        // Blocked by a foreign key — the account still has linked RFQs or campaigns.
+        $db->rollBack();
+        // Blocked by a foreign key — the account still has linked RFQs.
+        error_log('Account delete blocked (id ' . $accountId . '): ' . $e->getMessage());
         $_SESSION['flash'] = ['type' => 'error', 'message' =>
-            'This customer cannot be deleted because it still has linked RFQs or campaigns. '
+            'This customer cannot be deleted because it still has linked RFQs. '
             . 'Remove or reassign those first.'];
     }
 }
@@ -282,25 +329,9 @@ $stmt = $db->prepare("SELECT * FROM interactions WHERE account_id=:id ORDER BY i
 $stmt->execute(['id'=>$accountId]);
 $interactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-include __DIR__ . '/../../../app/Shared/header.php';
-include __DIR__ . '/../../../app/Shared/sidebar.php';
+layout_open();
 ?>
 
-<style>
-/* Local: repeating item cards for contacts + interactions (not a global component) */
-.card-box {
-    border: 1px solid #e0e0e0;
-    padding: 0.85rem 1rem;
-    margin-bottom: 0.75rem;
-    border-radius: 6px;
-}
-.inline-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin-top: 0.6rem;
-}
-</style>
 
 <section class="card">
 
@@ -328,7 +359,7 @@ include __DIR__ . '/../../../app/Shared/sidebar.php';
 <form method="POST">
 <?= App\Core\Csrf::field() ?>
 
-<table class="data-table">
+<table class="table">
 
 <?php
 function field($label,$name,$value,$editMode){
@@ -482,10 +513,10 @@ field("Tags","tags",$account['tags'],$editMode);
     <div class="form-group">
         <label for="i-type" class="form-label">Type</label>
         <select id="i-type" name="interaction_type" class="form-control">
-            <option>Call</option>
-            <option>Email</option>
-            <option>Meeting</option>
-            <option>Note</option>
+            <option value="call">Call</option>
+            <option value="email">Email</option>
+            <option value="meeting">Meeting</option>
+            <option value="note">Note</option>
         </select>
     </div>
 
@@ -522,10 +553,10 @@ field("Tags","tags",$account['tags'],$editMode);
     <div class="form-group">
         <label class="form-label">Type</label>
         <select name="interaction_type" class="form-control">
-            <option <?= $i['interaction_type']=='Call'?'selected':'' ?>>Call</option>
-            <option <?= $i['interaction_type']=='Email'?'selected':'' ?>>Email</option>
-            <option <?= $i['interaction_type']=='Meeting'?'selected':'' ?>>Meeting</option>
-            <option <?= $i['interaction_type']=='Note'?'selected':'' ?>>Note</option>
+            <option value="call"    <?= $i['interaction_type']=='call'?'selected':'' ?>>Call</option>
+            <option value="email"   <?= $i['interaction_type']=='email'?'selected':'' ?>>Email</option>
+            <option value="meeting" <?= $i['interaction_type']=='meeting'?'selected':'' ?>>Meeting</option>
+            <option value="note"    <?= $i['interaction_type']=='note'?'selected':'' ?>>Note</option>
         </select>
     </div>
 
@@ -542,7 +573,7 @@ field("Tags","tags",$account['tags'],$editMode);
 
 <?php else: ?>
 
-<strong><?= htmlspecialchars($i['interaction_type']) ?></strong>
+<strong><?= htmlspecialchars(ucfirst($i['interaction_type'])) ?></strong>
 <div class="text-muted"><?= htmlspecialchars($i['interaction_subject']) ?></div>
 <div><?= nl2br(htmlspecialchars($i['notes'])) ?></div>
 
@@ -568,4 +599,4 @@ field("Tags","tags",$account['tags'],$editMode);
 
 </section>
 
-<?php include __DIR__ . '/../../../app/Shared/footer.php'; ?>
+<?php layout_close(); ?>

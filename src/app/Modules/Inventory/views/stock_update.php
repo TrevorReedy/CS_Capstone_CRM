@@ -1,5 +1,5 @@
 <section class="card">
-    <div class="rfq-board-header">
+    <div class="page-header">
         <h1>Update Stock</h1>
         <a href="/modules/inventory/products.php" class="btn rfq-list-clear-btn">&#8592; Back to Inventory</a>
     </div>

@@ -1,7 +1,7 @@
 # Typhon Cath CRM Diagram Package Index
 
 Project: Typhon Cath CRM
-Source documents translated: requirements.md and requirements_clarification.txt
+Source documents translated: ../project/requirements.md and requirements_clarification.txt
 System type: Lightweight internal CRM, monolithic web application
 Stack: HTML/CSS/JavaScript/jQuery/Bootstrap frontend, PHP backend/business logic, MySQL database
 Main modules: Customer Management, RFQ/Pipeline Management, Digital Campaign Management, Inventory Management, Integration/Dashboard
@@ -25,6 +25,21 @@ This folder contains Markdown specifications for diagrams that can be converted 
 11. `11_three_tier_deployment_architecture.md`
 12. `12_crud_matrix.md`
 13. `13_nonfunctional_quality_diagram.md`
+
+## As-built diagram (not a brief)
+
+`14_modules_and_data_model.md` is different in kind from the thirteen above.
+Those are briefs written *before* the diagram, describing what should be drawn.
+This one was generated *from the code and `database/schema.sql` as they actually
+are, so it records what was built rather than what was planned. Two pages in one
+file, `../drawio/14_modules_and_data_model.drawio`:
+
+| Page | Shows |
+|---|---|
+| 1 — Modules & Functions | The six modules as Controller / Service / Repository, with representative public methods and the counts not shown |
+| 2 — Data Model & Cardinality | All fifteen tables with crow's-foot cardinality read off the real `FOREIGN KEY` constraints |
+
+Regenerate both after a schema or module change — see that file for the command.
 
 ## Notes for draw.io conversion
 

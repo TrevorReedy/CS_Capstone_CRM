@@ -342,8 +342,11 @@ class RFQRepository
             $rfqId,
             (float)$data['quote_amount'],
             isset($data['discount']) && $data['discount'] !== '' ? (float)$data['discount'] : 0,
-            $data['validity_start_date'] !== '' ? $data['validity_start_date'] : null,
-            $data['validity_end_date']   !== '' ? $data['validity_end_date']   : null,
+            // The validity window is optional — validateQuoteInput() only
+            // compares the dates when both are present — so a quote saved
+            // without them must not depend on the keys existing.
+            ($data['validity_start_date'] ?? '') !== '' ? $data['validity_start_date'] : null,
+            ($data['validity_end_date']   ?? '') !== '' ? $data['validity_end_date']   : null,
         ]);
         return (int)$this->db->lastInsertId();
     }
@@ -358,9 +361,25 @@ class RFQRepository
             // Lock this product's inventory row for the duration of the
             // transaction so concurrent reservations serialize instead of racing
             // on available_quantity / reserved_quantity.
-            $this->db->prepare(
+            $lock = $this->db->prepare(
                 "SELECT available_quantity FROM inventory WHERE product_id = ? FOR UPDATE"
-            )->execute([$productId]);
+            );
+            $lock->execute([$productId]);
+            $available = $lock->fetchColumn();
+
+            // The lock alone only serialized the races — it never rejected them,
+            // so an over-sized reservation drove available_quantity negative.
+            if ($available === false) {
+                throw new \DomainException('No inventory record exists for this product.');
+            }
+            if ($qty < 1) {
+                throw new \DomainException('Reservation quantity must be at least 1.');
+            }
+            if ((int)$available < $qty) {
+                throw new \DomainException(
+                    "Insufficient inventory: {$available} available, {$qty} requested."
+                );
+            }
 
             $stmt = $this->db->prepare("
                 INSERT INTO rfq_inventory_reservations (rfq_id, product_id, quantity_reserved, reservation_status)
@@ -375,6 +394,12 @@ class RFQRepository
                     reserved_quantity  = reserved_quantity  + ?
                 WHERE product_id = ?
             ")->execute([$qty, $qty, $productId]);
+
+            // Record it in the ledger. RFQ-driven stock movements used to be
+            // invisible there, so the audit trail disagreed with the stock it
+            // was supposed to explain. Inside the transaction, so a rollback
+            // discards the ledger row too.
+            $this->logInventoryMovement($productId, 'reserved', -$qty, "Reserved for RFQ #{$rfqId}.");
 
             $this->db->commit();
             return $reservationId;
@@ -414,8 +439,11 @@ class RFQRepository
         $stmt->execute([
             (float)$data['quote_amount'],
             isset($data['discount']) && $data['discount'] !== '' ? (float)$data['discount'] : 0,
-            $data['validity_start_date'] !== '' ? $data['validity_start_date'] : null,
-            $data['validity_end_date']   !== '' ? $data['validity_end_date']   : null,
+            // The validity window is optional — validateQuoteInput() only
+            // compares the dates when both are present — so a quote saved
+            // without them must not depend on the keys existing.
+            ($data['validity_start_date'] ?? '') !== '' ? $data['validity_start_date'] : null,
+            ($data['validity_end_date']   ?? '') !== '' ? $data['validity_end_date']   : null,
             $id,
         ]);
     }
@@ -434,7 +462,17 @@ class RFQRepository
         $valid = ['Reserved', 'Released', 'Converted'];
         if (!in_array($status, $valid, true)) return;
 
-        $this->db->beginTransaction();
+        // Join an open transaction rather than opening a second one. A caller
+        // that converts several reservations as one unit — RFQService::
+        // changeStage() winning a multi-product RFQ — wraps the whole loop, and
+        // an unconditional beginTransaction() here made that impossible:
+        // PDO throws "There is already an active transaction". Same guard as
+        // InventoryService::transactional().
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
+
         try {
             $stmt = $this->db->prepare(
                 "SELECT product_id, quantity_reserved, reservation_status FROM rfq_inventory_reservations WHERE id = ? FOR UPDATE"
@@ -442,8 +480,13 @@ class RFQRepository
             $stmt->execute([$id]);
             $row = $stmt->fetch();
 
+            // Already terminal, or gone: nothing to do. Nothing has been written
+            // yet, so when the transaction belongs to a caller we must return
+            // without touching it — rolling back here would discard their work.
             if (!$row || $row['reservation_status'] !== 'Reserved') {
-                $this->db->rollBack();
+                if ($ownsTransaction) {
+                    $this->db->rollBack();
+                }
                 return;
             }
 
@@ -468,9 +511,22 @@ class RFQRepository
                 "UPDATE rfq_inventory_reservations SET reservation_status = ? WHERE id = ?"
             )->execute([$status, $id]);
 
-            $this->db->commit();
+            // Released returns stock to available; Converted consumes it. Both
+            // change inventory, so both belong in the ledger.
+            $this->logInventoryMovement(
+                $productId,
+                $status === 'Released' ? 'released' : 'converted',
+                $status === 'Released' ? $qty : 0,
+                ($status === 'Released' ? 'Released from' : 'Converted for') . " reservation #{$id}."
+            );
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
         } catch (\Throwable $e) {
-            $this->db->rollBack();
+            if ($ownsTransaction) {
+                $this->db->rollBack();
+            }
             throw $e;
         }
     }
@@ -531,9 +587,28 @@ class RFQRepository
             $stmt->execute([$id]);
             $res = $stmt->fetch();
 
+            if ($newQty < 1) {
+                throw new \DomainException('Reservation quantity must be at least 1.');
+            }
+
             if ($res && $res['reservation_status'] === 'Reserved') {
                 $diff = $newQty - (int)$res['quantity_reserved'];
                 if ($diff !== 0) {
+                    // Lock inventory too: the reservation-row lock above does not
+                    // stop two reservations of the same product from racing here.
+                    $lock = $this->db->prepare(
+                        "SELECT available_quantity FROM inventory WHERE product_id = ? FOR UPDATE"
+                    );
+                    $lock->execute([$res['product_id']]);
+                    $available = $lock->fetchColumn();
+
+                    // Only an increase consumes stock; a decrease returns it.
+                    if ($diff > 0 && (int)$available < $diff) {
+                        throw new \DomainException(
+                            "Insufficient inventory: {$available} available, {$diff} more requested."
+                        );
+                    }
+
                     $this->db->prepare("
                         UPDATE inventory
                         SET available_quantity = available_quantity - ?,
@@ -552,6 +627,56 @@ class RFQRepository
             $this->db->rollBack();
             throw $e;
         }
+    }
+
+
+    /**
+     * Append an inventory_movements row for an RFQ-driven stock change.
+     *
+     * Duplicates InventoryRepository::logMovement rather than calling it so the
+     * write joins the caller's open transaction on this same connection. The
+     * ledger is append-only and read by the Inventory module's ledger view.
+     */
+    private function logInventoryMovement(int $productId, string $movementType, ?int $quantityDelta, string $note): void
+    {
+        $userId = $_SESSION['user']['id'] ?? null;
+
+        $stmt = $this->db->prepare(
+            "SELECT p.product_name, p.sku, i.available_quantity, i.reserved_quantity
+               FROM products p
+               LEFT JOIN inventory i ON i.product_id = p.id
+              WHERE p.id = ?"
+        );
+        $stmt->execute([$productId]);
+        $product = $stmt->fetch();
+        if ($product === false) {
+            return;
+        }
+
+        $userName = null;
+        if ($userId !== null) {
+            $u = $this->db->prepare("SELECT name FROM users WHERE id = ?");
+            $u->execute([$userId]);
+            $userName = $u->fetchColumn() ?: null;
+        }
+
+        $this->db->prepare(
+            "INSERT INTO inventory_movements
+                (product_id, product_name, sku, user_id, user_name, movement_type,
+                 quantity_delta, available_quantity_after, reserved_quantity_after, note)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )->execute([
+            $productId,
+            $product['product_name'],
+            $product['sku'],
+            $userId,
+            $userName,
+            $movementType,
+            $quantityDelta,
+            $product['available_quantity'] !== null ? (int)$product['available_quantity'] : null,
+            $product['reserved_quantity']  !== null ? (int)$product['reserved_quantity']  : null,
+            $note,
+        ]);
     }
 
     // ── Analytics ─────────────────────────────────────────────────────────────

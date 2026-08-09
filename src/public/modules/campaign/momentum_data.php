@@ -2,11 +2,19 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\ErrorResponse;
+use App\Core\Permissions;
 use App\Modules\Campaign\CampaignRepository;
 
 Auth::requireLogin();
 
 header('Content-Type: application/json');
+
+if (!Permissions::can('campaigns.metrics')) {
+    http_response_code(403);
+    echo json_encode(['error' => true, 'message' => 'Forbidden']);
+    exit;
+}
 
 try {
     $validSegments = ['all', 'accounts', 'contacts'];
@@ -71,15 +79,8 @@ echo json_encode([
     'labels'        => array_values(array_column($rows, 'period_label')),
     'recipients'    => array_values(array_map('intval', array_column($rows, 'total_recipients'))),
     'sent'          => array_values(array_map('intval', array_column($rows, 'campaigns_sent'))),
-    'openRate'      => array_values(array_map(fn($v) => $v !== null ? (float)$v : null, array_column($rows, 'avg_open_rate'))),
-    'clickRate'     => array_values(array_map(fn($v) => $v !== null ? (float)$v : null, array_column($rows, 'avg_click_rate'))),
-    'engagementGap' => array_values(array_map(fn($v) => $v !== null ? (float)$v : null, array_column($rows, 'avg_engagement_gap'))),
 ]);
 } catch (Throwable $e) {
-    http_response_code(500);
-
-    echo json_encode([
-        'error' => true,
-        'message' => $e->getMessage(),
-    ]);
+    // Never echo the PDO message: it leaks schema and SQL to the client.
+    ErrorResponse::json($e, 'momentum_data.php');
 }

@@ -7,17 +7,12 @@ use App\Core\Permissions;
 
 Auth::requireLogin();
 if (!Permissions::can('campaigns.view')) {
-    http_response_code(403);
-    include __DIR__ . '/../../../app/Shared/header.php';
-    include __DIR__ . '/../../../app/Shared/sidebar.php';
-    include __DIR__ . '/../../../app/Shared/error_403.php';
-    include __DIR__ . '/../../../app/Shared/footer.php';
+    layout_deny();
     exit;
 }
 
 
-include __DIR__ . '/../../../app/Shared/header.php';
-include __DIR__ . '/../../../app/Shared/sidebar.php';
+layout_open();
 $controller = new CampaignController();
 $controller->index();
-include __DIR__ . '/../../../app/Shared/footer.php';
+layout_close();

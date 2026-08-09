@@ -125,6 +125,31 @@ h1, h2, h3, h4, h5, h6 { color: #111; font-weight: 700; }
   opacity: 0.8;
 }
 
+/* Logout is a CSRF-protected POST form, not a link — style its button to match
+   the surrounding nav items so the change is invisible to the user. */
+.app-nav-logout {
+  margin: 0;
+}
+
+.app-nav-logout-btn {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-nav-logout-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
 .app-main {
   flex: 1;
   padding: 2rem;
@@ -388,6 +413,26 @@ label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
   margin: 0.25rem 0 0;
 }
 
+/* ── Dashboard sections ───────────────────────────────── */
+/* Each domain (RFQ / Campaigns / Customers / Inventory) is a self-contained
+   section with a labelled divider, so multi-role users can tell where one
+   module's cards end and the next begins. */
+.dash-section { margin-top: 1.75rem; }
+.dash-section:first-of-type { margin-top: 1rem; }
+
+.dash-section-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.dash-section .dash-grid { margin-top: 0.75rem; }
+
 /* ── Dashboard cards ──────────────────────────────────── */
 /* Cards scaled ~1.01× (25% then a further 10% down from the earlier 1.5×). The
    grid caps at 5 columns: each column is at least 1/5 of the row width (minus the
@@ -541,7 +586,55 @@ label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
   border-bottom: 1px solid #f3f4f6;
   background: #fff;
   transition: background-color 0.12s ease, color 0.12s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
+
+/* Audience selection reuses .rfq-search-* as a multi-select: a check column on
+   the left of each option, plus removable chips for the current selection.
+   (Previously duplicated as inline <style> in audience_selection.php.) */
+.rfq-search-option--checked { background: #f0f9ff; font-weight: 500; }
+
+.rfq-option-check {
+  width: 1rem;
+  text-align: center;
+  color: var(--primary-blue);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.audience-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.audience-chip {
+  background: #e0f0ff;
+  color: var(--primary-blue);
+  border: 1px solid var(--primary-blue);
+  border-radius: 4px;
+  padding: 2px 6px 2px 8px;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.audience-chip-remove {
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--primary-blue);
+  border: none;
+  background: none;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.audience-chip-remove:hover { opacity: 1; }
 
 .rfq-search-option:last-child {
   border-bottom: none;
@@ -1192,4 +1285,31 @@ label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
   color: #374151;
   background: #fff;
   height: 30px;
+}
+
+/* ── Customer Module ─────────────────────────────────── */
+/* Moved out of inline <style> in create_account.php / account_detail.php so all
+   component styling lives in one stylesheet. */
+.entity-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.card-box {
+  border: 1px solid #e0e0e0;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  border-radius: 6px;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 0.6rem;
 }

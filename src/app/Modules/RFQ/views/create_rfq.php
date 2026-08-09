@@ -1,49 +1,7 @@
-<style>
-.rfq-search-dropdown { flex: 1; }
-
-.rfq-search-results {
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-top: 2px solid var(--primary-blue);
-    border-radius: 0 0 6px 6px;
-    max-height: 220px;
-    overflow-y: auto;
-    margin-top: 1px;
-}
-
-.rfq-search-option {
-    padding: 0.55rem 0.75rem;
-    cursor: pointer;
-    font-size: 0.9rem;
-    color: #374151;
-    border-bottom: 1px solid #f3f4f6;
-}
-
-.rfq-search-option:last-child { border-bottom: none; }
-
-.rfq-search-option:hover,
-.rfq-search-option--focused {
-    background: #f5f9ff;
-    color: var(--primary-blue);
-}
-
-.rfq-search-option--empty {
-    padding: 0.55rem 0.75rem;
-    color: #9ca3af;
-    cursor: default;
-    font-style: italic;
-    font-size: 0.875rem;
-}
-
-.rfq-search-input--selected {
-    background: #f0f9ff;
-    border-color: var(--primary-blue) !important;
-}
-</style>
 
 <section class="card">
 
-    <div class="module-header">
+    <div class="page-header">
         <h1>Create RFQ</h1>
         <a href="/modules/rfq/pipeline.php" class="btn btn-secondary">&#8592; Back</a>
     </div>

@@ -5,7 +5,7 @@ $pageTitle = $isEdit ? 'Edit Product' : 'Add Product';
 
 <section class="card">
     <!-- Header row -->
-    <div class="rfq-board-header">
+    <div class="page-header">
         <h1><?= $pageTitle ?></h1>
         <a href="/modules/inventory/products.php" class="btn rfq-list-clear-btn">&#8592; Back to Inventory</a>
     </div>

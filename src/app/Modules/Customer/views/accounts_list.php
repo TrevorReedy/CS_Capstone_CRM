@@ -1,15 +1,16 @@
 <section class="card">
 
-    <div class="page-header">
-        <h1>Customer Accounts</h1>
-        <a href="create_account.php" class="add-btn" title="Add a new customer">+</a>
-    </div>
+    <?php page_header('Customer Accounts', [
+        'href'  => 'create_account.php',
+        'label' => '+ New Customer',
+        'title' => 'Add a new customer',
+    ]); ?>
 
     <div class="toolbar">
         <h2 class="rfq-list-title">All Customers</h2>
     </div>
 
-    <table class="data-table js-dt"
+    <table class="table js-dt"
            data-dt-url="/modules/customer/accounts_data.php"
            data-dt-export="/modules/customer/accounts_export.php">
         <thead>

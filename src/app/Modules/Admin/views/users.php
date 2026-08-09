@@ -1,6 +1,6 @@
 <section class="card">
 
-    <div class="module-header">
+    <div class="page-header">
         <h1>Users</h1>
         <div class="module-header-actions">
             <a href="/admin/permissions.php" class="btn btn-secondary">Permission Matrix</a>

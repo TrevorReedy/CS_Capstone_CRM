@@ -2,13 +2,18 @@
 require_once __DIR__ . '/../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Modules\Dashboard\DashboardController;
 
 Auth::requireLogin();
 
-include __DIR__ . '/../app/Shared/header.php';
-include __DIR__ . '/../app/Shared/sidebar.php';
+if (!Permissions::can('dashboard.view')) {
+    layout_deny();
+    exit;
+}
+
+layout_open();
 
 (new DashboardController())->index();
 
-include __DIR__ . '/../app/Shared/footer.php';
+layout_close();

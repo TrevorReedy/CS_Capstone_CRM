@@ -2,12 +2,18 @@
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
 use App\Core\Auth;
+use App\Core\Permissions;
 use App\Modules\Campaign\CampaignController;
 
 Auth::requireLogin();
 
 // Reject state-changing (POST) requests without a valid CSRF token.
 require_once __DIR__ . '/../../../app/Middleware/csrf.php';
+
+if (!Permissions::can('campaigns.edit')) {
+    layout_deny();
+    exit;
+}
 
 $campaignId = (int)($_GET['campaign_id'] ?? 0);
 if ($campaignId === 0) {
@@ -30,7 +36,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     };
 }
 
-include __DIR__ . '/../../../app/Shared/header.php';
-include __DIR__ . '/../../../app/Shared/sidebar.php';
+layout_open();
 $controller->audience($campaignId);
-include __DIR__ . '/../../../app/Shared/footer.php';
+layout_close();

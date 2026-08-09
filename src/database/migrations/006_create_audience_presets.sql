@@ -1,4 +1,3 @@
-USE typhon_cath_crm;
 
 CREATE TABLE audience_presets (
     id INT AUTO_INCREMENT PRIMARY KEY,

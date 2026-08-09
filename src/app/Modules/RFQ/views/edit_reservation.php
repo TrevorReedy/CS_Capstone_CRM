@@ -1,6 +1,6 @@
 <section class="card">
 
-    <div class="module-header">
+    <div class="page-header">
         <h1>Edit Reservation</h1>
         <a href="/modules/rfq/edit.php?id=<?= (int)$rfq['id'] ?>" class="btn btn-secondary">&#8592; Back</a>
     </div>

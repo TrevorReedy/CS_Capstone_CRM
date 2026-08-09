@@ -370,48 +370,28 @@ $xref
 
 
 
+    /**
+     * Build the canonical download filename: <MM-DD-YYYY>_<Module>_<Entity>.pdf
+     * e.g. filename('RFQ', 'Apex Medical Solutions') => 07-23-2026_RFQ_Apex_Medical_Solutions.pdf
+     *
+     * Every non-alphanumeric run in the module/entity collapses to a single
+     * underscore (spaces, punctuation, accents), so the result is always a safe,
+     * consistent filename across modules.
+     */
+    public static function filename(string $module, string $entity): string
+    {
+        $slug = static fn(string $s): string =>
+            trim(preg_replace('/[^A-Za-z0-9]+/', '_', $s), '_');
 
+        $module = $slug($module) ?: 'Report';
+        $entity = $slug($entity) ?: 'Unknown';
 
-
-    public static function filename(
-        string $module,
-        string $entity
-    ): string {
-
-        $slug =
-            static fn(string $s): string =>
-            trim(
-                preg_replace(
-                    '/[^A-Za-z0-9]+/',
-                    '_',
-                    $s
-                ),
-                '_'
-            );
-
-
-        $module =
-            $slug($module) ?: 'Report';
-
-
-        $entity =
-            $slug($entity) ?: 'Unknown';
-
-
-
-        return date('m-d-Y')
-            . "_{$module}_{$entity}.pdf";
+        return date('m-d-Y') . "_{$module}_{$entity}.pdf";
     }
 
 
-
-
-
-
-    private function escape(
-        string $text
-    ): string {
-
+    private function escape(string $text):string
+    {
         return str_replace(
             ["\\","(",")"],
             ["\\\\","\\(","\\)"],

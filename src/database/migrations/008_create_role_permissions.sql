@@ -1,4 +1,3 @@
-USE typhon_cath_crm;
 
 CREATE TABLE role_permissions (
     role_id    INT          NOT NULL,

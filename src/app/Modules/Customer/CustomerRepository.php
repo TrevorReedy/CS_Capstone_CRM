@@ -88,6 +88,13 @@ class CustomerRepository
         return (int) $stmt->fetchColumn();
     }
 
+    /** Total number of contacts across all accounts (dashboard Total Accounts card). */
+    public function contactCount(): int
+    {
+        $db = Database::connection();
+        return (int) $db->query("SELECT COUNT(*) FROM contacts")->fetchColumn();
+    }
+
     // Shared WHERE builder so search() and searchCount() always agree.
     private function buildAccountWhere(string $search, string $industry, string $source): array
     {

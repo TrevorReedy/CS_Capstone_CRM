@@ -24,15 +24,9 @@ class CampaignController
 
     public function index(): void
     {
-        // The campaigns list table is now a client-driven DataTable (server-side
+        // The campaigns list table is a client-driven DataTable (server-side
         // processing) fed by /modules/campaign/campaigns_data.php — no list query
-        // here. The analytics + momentum sections below it are unchanged.
-        $stats         = $this->repo->dashboardStats();
-        $upcoming      = $this->repo->upcomingScheduledSends();
-        $topPerformers = $this->repo->topPerformers();
-        $reEngagement  = $this->repo->reEngagementCandidates();
-        $engagementGap = $this->repo->engagementGap();
-        $momentum      = $this->repo->campaignMomentum(date('Y-m-d', strtotime('-12 weeks')), date('Y-m-d 23:59:59'));
+        // needed here.
         include __DIR__ . '/views/campaigns_list.php';
     }
 
@@ -91,13 +85,8 @@ class CampaignController
     // Renders the edit form; re-populates with $this->formInput and $this->formErrors on validation failure.
     public function edit(int $id): void
     {
-    if (!Permissions::can('campaigns.edit')) {
-    http_response_code(403);
-
-    include __DIR__ . '/../../../app/Shared/error_403.php';
-    include __DIR__ . '/../../../app/Shared/footer.php';
-    exit;
-}
+        // Authorization is enforced at the entry point (public/modules/campaign/edit.php)
+        // so it covers the POST path too, not just this render.
         $campaign = $this->repo->findById($id);
         if (!$campaign) {
             $_SESSION['flash'] = ['type' => 'error', 'message' => 'Campaign not found.'];
@@ -129,12 +118,29 @@ class CampaignController
         $this->audienceErrors = $this->service->validateAudienceInput($this->audienceInput);
 
         if (empty($this->audienceErrors)) {
-            // Edit mode: remove all existing rows for the old segment name before re-inserting.
+            // Edit mode replaces a segment: delete the old rows, then insert the
+            // new ones. Those are two writes, and without a transaction a failure
+            // between them left the campaign with no audience at all — the old
+            // members already gone, the new ones never added.
             $editSegment = trim($_POST['_edit_segment'] ?? '');
-            if ($editSegment !== '') {
-                $this->repo->deleteAudienceBySegment($campaignId, $editSegment);
+            $db = \App\Core\Database::connection();
+            $db->beginTransaction();
+            try {
+                if ($editSegment !== '') {
+                    $this->repo->deleteAudienceBySegment($campaignId, $editSegment);
+                }
+                $this->service->addAudienceSegment($campaignId, $this->audienceInput);
+                $db->commit();
+            } catch (\Throwable $e) {
+                $db->rollBack();
+                $_SESSION['flash'] = [
+                    'type'    => 'error',
+                    'message' => \App\Core\ErrorResponse::flash($e, 'save the audience segment', 'CampaignController::handleAudiencePost'),
+                ];
+                header('Location: /modules/campaign/audience.php?campaign_id=' . $campaignId);
+                exit;
             }
-            $this->service->addAudienceSegment($campaignId, $this->audienceInput);
+
             $msg = $editSegment !== '' ? 'Audience segment updated.' : 'Audience segment added.';
             $_SESSION['flash'] = ['type' => 'success', 'message' => $msg];
             header('Location: /modules/campaign/audience.php?campaign_id=' . $campaignId);
@@ -239,11 +245,7 @@ class CampaignController
     public function handleDeletePost(int $id): void
     {
     if (!Permissions::can('campaigns.delete')) {
-    http_response_code(403);
-    include __DIR__ . '/../../../app/Shared/header.php';
-    include __DIR__ . '/../../../app/Shared/sidebar.php';
-    include __DIR__ . '/../../../app/Shared/error_403.php';
-    include __DIR__ . '/../../../app/Shared/footer.php';
+    layout_deny();
     exit;
 }
     {
@@ -258,11 +260,7 @@ class CampaignController
     public function handleSimulatePost(int $id): void
     {
     if (!Permissions::can('campaigns.metrics')) {
-    http_response_code(403);
-    include __DIR__ . '/../../../app/Shared/header.php';
-    include __DIR__ . '/../../../app/Shared/sidebar.php';
-    include __DIR__ . '/../../../app/Shared/error_403.php';
-    include __DIR__ . '/../../../app/Shared/footer.php';
+    layout_deny();
     exit;
 }
         $this->service->simulateSend($id);

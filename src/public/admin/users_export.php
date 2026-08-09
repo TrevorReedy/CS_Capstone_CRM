@@ -17,7 +17,7 @@ if (!Permissions::can('admin.manage_users')) {
 }
 
 $format = (string)($_GET['format'] ?? 'csv');
-$rows   = UserRepository::listTable()->allRows($_GET);
+$rows   = UserRepository::listTable()->exportRows($_GET);
 
 $columns = [
     'name'       => 'Name',

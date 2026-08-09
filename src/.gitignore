@@ -5,3 +5,16 @@
 /public/uploads/*
 !/public/uploads/.gitkeep
 .DS_Store
+
+# Composer-installed dependencies — a build artifact, produced by
+# `composer install` and shipped by .github/workflows/deploy.yml.
+#
+# Git used to track 15 files in here: the Composer autoloader plus two dompdf
+# font caches, but not the dompdf library they refer to. A checkout therefore
+# had a vendor/ that looked complete and whose autoloader pointed at classes
+# that did not exist, which is why PDF export failed on hand-deployed copies.
+# Run `composer install` after cloning.
+/vendor/
+
+# PHPUnit's result cache.
+/.phpunit.cache/

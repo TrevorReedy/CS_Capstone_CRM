@@ -1,17 +1,5 @@
 <?php $entityType = $input['entity_type'] ?? ''; ?>
 
-<style>
-/* Strip default fieldset chrome so it flows like the rest of the form. */
-.entity-fieldset {
-    border: 0;
-    margin: 0;
-    padding: 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-}
-</style>
 
 <section class="card">
 

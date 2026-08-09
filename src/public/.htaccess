@@ -1,0 +1,32 @@
+# Defense in depth for the document root.
+#
+# The application writes PHP errors to src/storage/logs (see bootstrap.php), but
+# a misconfigured php.ini or a fatal raised before bootstrap runs can still drop
+# an `error_log` file next to the script that produced it — inside this
+# directory. Three such files were previously committed and web-readable, and
+# they contained stack traces and absolute hosting paths.
+#
+# Apache 2.4 syntax.
+<FilesMatch "^(error_log|.*\.log|\.env.*|.*\.sql|composer\.(json|lock))$">
+    Require all denied
+</FilesMatch>
+
+# Never serve dotfiles (.git, .env, editor swap files).
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+Options -Indexes
+
+# Security response headers.
+#
+# bootstrap.php already sets these on every PHP response, which is what covers
+# the production cPanel host if AllowOverride is off there. These entries exist
+# for the responses PHP never touches — CSS, JS, images served straight by
+# Apache — so `setifempty` is deliberate: it fills the gap without duplicating
+# the header on PHP pages.
+<IfModule mod_headers.c>
+    Header setifempty X-Content-Type-Options "nosniff"
+    Header setifempty X-Frame-Options "DENY"
+    Header setifempty Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

@@ -17,7 +17,7 @@ $allStages = ['New', 'In Review', 'Quoted', 'Negotiation', 'Won', 'Lost'];
 
 <!-- ── Header ─────────────────────────────────────────── -->
 <section class="card">
-    <div class="module-header">
+    <div class="page-header">
         <div class="rfq-detail-title-row">
             <h1><?= htmlspecialchars($rfq['title']) ?></h1>
 
@@ -38,6 +38,7 @@ $allStages = ['New', 'In Review', 'Quoted', 'Negotiation', 'Won', 'Lost'];
             </form>
         </div>
         <div class="header-actions">
+            <a href="/modules/rfq/rfq_pdf.php?id=<?= (int)$rfq['id'] ?>" class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;" title="Download this RFQ and its quotes &amp; reservations as a PDF">Download PDF</a>
             <a href="/modules/rfq/edit.php?id=<?= (int)$rfq['id'] ?>" class="btn btn-primary" style="font-size:0.85rem;padding:6px 14px;">Edit</a>
             <form method="POST" action="/modules/rfq/detail.php?id=<?= (int)$rfq['id'] ?>" style="margin:0;"
                   onsubmit="return confirm('Delete this RFQ and all its quotes and reservations? This cannot be undone.');">
@@ -121,7 +122,7 @@ $allStages = ['New', 'In Review', 'Quoted', 'Negotiation', 'Won', 'Lost'];
         $quoteRequired = in_array($rfq['stage'], ['Quoted', 'Negotiation', 'Won', 'Lost'], true);
         $addQuoteTitle = $quoteRequired ? 'Add a quote' : 'Quotes are not required for ' . $rfq['stage'] . ' stage';
     ?>
-    <div class="module-header">
+    <div class="page-header">
         <h2 class="rfq-detail-card-title">Quotes</h2>
         <a
             href="<?= $quoteRequired ? '/modules/rfq/create_quote.php?rfq_id=' . (int)$rfq['id'] : '#' ?>"
@@ -208,7 +209,7 @@ $allStages = ['New', 'In Review', 'Quoted', 'Negotiation', 'Won', 'Lost'];
     <?php
         $addResTitle = $quoteRequired ? 'Reserve inventory for this RFQ' : 'Inventory reservation not available for ' . $rfq['stage'] . ' stage';
     ?>
-    <div class="module-header">
+    <div class="page-header">
         <h2 class="rfq-detail-card-title">Inventory Reservations</h2>
         <a
             href="<?= $quoteRequired ? '/modules/rfq/create_reservation.php?rfq_id=' . (int)$rfq['id'] : '#' ?>"

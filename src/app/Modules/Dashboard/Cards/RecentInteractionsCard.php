@@ -5,20 +5,8 @@ use App\Modules\Dashboard\DashboardCard;
 use App\Modules\Customer\CustomerRepository;
 
 /**
- * OWNER: Max (Customer) — DROP-IN SLOT
- *
- * Preview card — the most recently logged customer interactions.
- *
- * TODO (Max): replace the stub rows with a real query. Add to DashboardRepository:
- *
- *   public function recentInteractions(int $limit = 5): array {
- *       // SELECT i.interaction_type, i.interaction_subject, a.account_name, i.interaction_date
- *       // FROM interactions i JOIN accounts a ON a.id = i.account_id
- *       // ORDER BY i.interaction_date DESC LIMIT ?
- *   }
- *
- * then map each row to:
- *   ['label' => interaction_subject, 'badge' => interaction_type, 'meta' => account_name]
+ * Preview card — the most recently logged customer interactions, backed by
+ * CustomerRepository::recentInteractions().
  */
 
 class RecentInteractionsCard extends DashboardCard

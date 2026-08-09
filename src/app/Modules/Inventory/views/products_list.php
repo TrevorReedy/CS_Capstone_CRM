@@ -1,7 +1,7 @@
 <section class="card">
-    <div class="rfq-board-header">
+    <div class="page-header">
         <h1>Inventory</h1>
-        <div style="display:flex; gap:0.5rem;">
+        <div class="header-actions">
             <a href="/modules/inventory/products.php?page=ledger" class="btn">Inventory Ledger</a>
             <a href="/modules/inventory/products.php?page=detail" class="btn btn-primary">+ Add Product</a>
         </div>

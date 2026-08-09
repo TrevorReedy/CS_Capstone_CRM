@@ -21,7 +21,7 @@ $typeBadge = [
 
 <!-- ── Header ─────────────────────────────────────────── -->
 <section class="card">
-    <div class="module-header">
+    <div class="page-header">
         <div class="detail-title-row">
             <h1><?= htmlspecialchars($campaign['campaign_name']) ?></h1>
             <span class="badge <?= $statusBadge[$campaign['status']] ?? 'badge-neutral' ?> detail-stage">
@@ -32,6 +32,7 @@ $typeBadge = [
             </span>
         </div>
         <div class="header-actions">
+            <a href="/modules/campaign/campaign_pdf.php?id=<?= (int)$campaign['id'] ?>" class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;" title="Download this campaign, its metrics &amp; audience as a PDF">Download PDF</a>
             <a href="/modules/campaign/edit.php?id=<?= (int)$campaign['id'] ?>" class="btn btn-primary" style="font-size:0.85rem;padding:6px 14px;">Edit</a>
             <a href="/modules/campaign/audience.php?campaign_id=<?= (int)$campaign['id'] ?>" class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;">Audience</a>
             <form method="POST" action="/modules/campaign/detail.php?id=<?= (int)$campaign['id'] ?>" style="margin:0;"
@@ -77,7 +78,7 @@ $typeBadge = [
 
 <!-- ── Metrics ─────────────────────────────────────────── -->
 <section class="card">
-    <div class="module-header">
+    <div class="page-header">
         <h2 class="detail-card-title">Performance Metrics</h2>
         <?php if ($campaign['status'] !== 'Sent' && $campaign['status'] !== 'Completed'): ?>
         <form method="POST" action="/modules/campaign/detail.php?id=<?= (int)$campaign['id'] ?>" style="margin:0;">
@@ -100,26 +101,6 @@ $typeBadge = [
             </div>
         </div>
 
-        <div class="metric-card">
-            <div class="metric-card-inner">
-                <p class="metric-label">Open Rate</p>
-                <p class="metric-value">
-                    <?= $campaign['open_rate'] !== null ? number_format((float)$campaign['open_rate'], 1) . '%' : '—' ?>
-                </p>
-                <p class="metric-sub">of sent</p>
-            </div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-card-inner">
-                <p class="metric-label">Click Rate</p>
-                <p class="metric-value">
-                    <?= $campaign['click_rate'] !== null ? number_format((float)$campaign['click_rate'], 1) . '%' : '—' ?>
-                </p>
-                <p class="metric-sub">of opens</p>
-            </div>
-        </div>
-
     </div>
 
     <?php if ($campaign['sent_count'] === 0 || $campaign['sent_count'] === '0'): ?>
@@ -129,9 +110,9 @@ $typeBadge = [
 
 <!-- ── Audience ────────────────────────────────────────── -->
 <section class="card">
-    <div class="module-header">
+    <div class="page-header">
         <h2 class="detail-card-title">Audience</h2>
-        <a href="/modules/campaign/audience.php?campaign_id=<?= (int)$campaign['id'] ?>" class="add-btn" title="Add audience segment">+</a>
+        <a href="/modules/campaign/audience.php?campaign_id=<?= (int)$campaign['id'] ?>" class="btn btn-primary" title="Add audience segment">+ Add Segment</a>
     </div>
 
     <?php if (empty($audience)): ?>

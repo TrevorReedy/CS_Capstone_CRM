@@ -122,7 +122,7 @@ class CampaignService
         }
     }
 
-    // Counts audience rows and generates simulated open/click metrics.
+    // Counts audience rows and records the simulated recipient (sent) count.
     public function simulateSend(int $campaignId): void
     {
         $audience = $this->repo->getAudienceByCampaignId($campaignId);
@@ -134,15 +134,8 @@ class CampaignService
             $sentCount = 1;
         }
 
-        // Deterministic-ish rates seeded by campaign ID for reproducibility
-        mt_srand($campaignId * 37);
-        $openRate  = round(mt_rand(3800, 7000) / 100, 2); // 38.00–70.00 %
-        $clickRate = round(mt_rand(800,  3000) / 100, 2); // 8.00–30.00 %
-
         $this->repo->updateMetrics($campaignId, [
             'sent_count' => $sentCount,
-            'open_rate'  => $openRate,
-            'click_rate' => $clickRate,
         ]);
     }
 }

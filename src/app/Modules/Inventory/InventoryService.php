@@ -16,6 +16,38 @@ class InventoryService
     }
 
     /**
+     * Run $work inside a single database transaction.
+     *
+     * Every write path here touches more than one table — products + inventory
+     * + the movements ledger — and each was issued as an independent statement.
+     * A failure partway through left a product with no inventory row, or stock
+     * that disagreed with the ledger that is supposed to audit it. Nested calls
+     * join the outer transaction rather than opening a second one.
+     *
+     * @template T
+     * @param callable():T $work
+     * @return T
+     */
+    private function transactional(callable $work): mixed
+    {
+        $db = \App\Core\Database::connection();
+
+        if ($db->inTransaction()) {
+            return $work();
+        }
+
+        $db->beginTransaction();
+        try {
+            $result = $work();
+            $db->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
      * Get the product list, optionally searched/filtered/sorted, with a
      * computed 'low_stock' flag (available_quantity below that product's own
      * low_stock_threshold) added to each row for the view.
@@ -75,10 +107,13 @@ class InventoryService
             throw new \InvalidArgumentException("SKU \"{$sku}\" is already in use by another product.");
         }
 
-        $productId = $this->repo->create($productName, $sku, $price, $description, $startingQuantity, $lowStockThreshold);
-        $this->repo->logMovement($productId, $userId, 'created', $startingQuantity, 'Product created.');
+        // products + inventory + ledger must land together or not at all.
+        return $this->transactional(function () use ($productName, $sku, $price, $description, $startingQuantity, $lowStockThreshold, $userId) {
+            $productId = $this->repo->create($productName, $sku, $price, $description, $startingQuantity, $lowStockThreshold);
+            $this->repo->logMovement($productId, $userId, 'created', $startingQuantity, 'Product created.');
 
-        return $productId;
+            return $productId;
+        });
     }
 
     /**
@@ -103,11 +138,13 @@ class InventoryService
             throw new \InvalidArgumentException("SKU \"{$sku}\" is already in use by another product.");
         }
 
-        $result = $this->repo->updateProduct($id, $productName, $sku, $price, $description);
-        $this->repo->updateLowStockThreshold($id, $lowStockThreshold);
-        $this->repo->logMovement($id, $userId, 'updated', null, 'Product details updated (name, SKU, price, description, and/or low stock threshold).');
+        return $this->transactional(function () use ($id, $productName, $sku, $price, $description, $lowStockThreshold, $userId) {
+            $result = $this->repo->updateProduct($id, $productName, $sku, $price, $description);
+            $this->repo->updateLowStockThreshold($id, $lowStockThreshold);
+            $this->repo->logMovement($id, $userId, 'updated', null, 'Product details updated (name, SKU, price, description, and/or low stock threshold).');
 
-        return $result;
+            return $result;
+        });
     }
 
     /**
@@ -123,19 +160,30 @@ class InventoryService
             throw new \InvalidArgumentException('Available quantity cannot be negative.');
         }
 
-        $before = $this->repo->findById($productId);
-        $delta  = $before !== null ? $availableQuantity - (int) $before['available_quantity'] : null;
+        return $this->transactional(function () use ($productId, $availableQuantity, $userId) {
+            $before = $this->repo->findById($productId);
+            $delta  = $before !== null ? $availableQuantity - (int) $before['available_quantity'] : null;
 
-        $result = $this->repo->updateAvailableQuantity($productId, $availableQuantity);
-        $this->repo->logMovement($productId, $userId, 'manual_adjustment', $delta, 'Manual stock adjustment.');
+            $result = $this->repo->updateAvailableQuantity($productId, $availableQuantity);
+            $this->repo->logMovement($productId, $userId, 'manual_adjustment', $delta, 'Manual stock adjustment.');
 
-        return $result;
+            return $result;
+        });
     }
 
     /**
      * Business rule: delete a product.
-     * Blocked if the product has active (Reserved) reservations —
-     * those must be released or converted first.
+     *
+     * Blocked while any reservation still references it — not only the active
+     * ones. rfq_inventory_reservations.product_id is a RESTRICT foreign key, so
+     * a Released or Converted row blocks the DELETE just as firmly as a Reserved
+     * one. Checking only the active ones produced a guard whose own advice
+     * ("release or convert them first") could not be followed: doing exactly
+     * that still failed, with an unhandled PDOException instead of this message.
+     *
+     * The two cases get different messages because they need different actions —
+     * an active reservation can be released, whereas a historical one is a
+     * permanent link to an RFQ and the product has to stay.
      */
     public function deleteProduct(int $id, ?int $userId = null): bool
     {
@@ -147,10 +195,25 @@ class InventoryService
             );
         }
 
-        // Log before deleting: logMovement snapshots product_name/sku by
-        // reading the product row, which won't exist once delete() runs.
-        $this->repo->logMovement($id, $userId, 'deleted', null, 'Product deleted.');
-        return $this->repo->delete($id);
+        $historical = $this->repo->countReservations($id);
+        if ($historical > 0) {
+            throw new \RuntimeException(
+                "Cannot delete — this product is referenced by {$historical} past " .
+                "reservation(s) on existing RFQs. Deleting it would erase that history."
+            );
+        }
+
+        // logMovement has to run first, because it snapshots product_name/sku by
+        // reading the product row and that row is gone once delete() succeeds.
+        // Wrapping both means a delete that still fails — a foreign key this
+        // method does not know about — takes the ledger entry down with it,
+        // rather than leaving the one audit trail this application has claiming
+        // a product was deleted while it is still there.
+        return $this->transactional(function () use ($id, $userId) {
+            $this->repo->logMovement($id, $userId, 'deleted', null, 'Product deleted.');
+
+            return $this->repo->delete($id);
+        });
     }
 
     /**

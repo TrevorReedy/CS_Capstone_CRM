@@ -17,7 +17,7 @@ if (!Permissions::can('inventory.view')) {
 }
 
 $format = (string)($_GET['format'] ?? 'csv');
-$rows   = InventoryRepository::listTable()->allRows($_GET);
+$rows   = InventoryRepository::listTable()->exportRows($_GET);
 
 $columns = [
     'sku'          => 'SKU',

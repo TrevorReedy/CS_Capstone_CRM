@@ -12,7 +12,7 @@ $rows  = $rows  ?? [];
 $pager = $pager ?? null;
 ?>
 <section class="card">
-    <div class="module-header">
+    <div class="page-header">
         <h2>Win Rate by Account</h2>
         <a href="/modules/rfq/pipeline.php" class="btn btn-secondary">Back to RFQs</a>
     </div>

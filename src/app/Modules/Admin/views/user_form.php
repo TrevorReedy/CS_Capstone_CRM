@@ -10,7 +10,7 @@ $hasCustom   = $isEdit && !empty($user['owner_user_id']);
 
 <section class="card">
 
-    <div class="module-header">
+    <div class="page-header">
         <h1><?= $title ?></h1>
         <div class="module-header-actions">
             <a href="/admin/users.php" class="btn btn-secondary">Cancel</a>

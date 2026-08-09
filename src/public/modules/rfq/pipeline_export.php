@@ -2,8 +2,8 @@
 /**
  * Export endpoint for the RFQ list (CSV / XML / PDF-via-print). Reuses the same
  * ServerTable source as pipeline_data.php with the current global search +
- * per-column filters + sort, but with NO limit, so the export reflects the full
- * filtered set rather than the visible page.
+ * per-column filters + sort + page window, so the export contains exactly the
+ * rows on screen.
  */
 require_once __DIR__ . '/../../../app/Core/bootstrap.php';
 
@@ -20,7 +20,7 @@ if (!Permissions::can('rfqs.view')) {
 }
 
 $format = (string)($_GET['format'] ?? 'csv');
-$rows   = RFQRepository::listTable()->allRows($_GET);
+$rows   = RFQRepository::listTable()->exportRows($_GET);
 
 $columns = [
     'id'           => '#',

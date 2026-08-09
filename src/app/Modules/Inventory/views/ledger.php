@@ -63,7 +63,7 @@ if (!empty($ledgerTypes)) $printParams['type'] = $ledgerTypes;
 ?>
 
 <section class="card">
-    <div class="rfq-board-header">
+    <div class="page-header">
         <h1>Inventory Ledger</h1>
         <div style="display:flex; gap:0.5rem;">
             <a href="/modules/inventory/products.php?page=ledger_print&<?= http_build_query($printParams) ?>" class="btn" target="_blank" rel="noopener">🖨 Print</a>

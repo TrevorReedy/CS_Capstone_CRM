@@ -1,6 +1,24 @@
 src/config/database.php
 secret/
 
+# Secrets. .env was untracked but not ignored — one `git add -A` from being
+# committed.
+.env
+src/.env
+
+# Logs. PHP's error_log lands next to whichever script wrote it, which put
+# stack traces and absolute hosting paths inside the public document root.
+# Three of those were tracked in git before this rule existed.
+error_log
+*.log
+src/storage/logs/*
+!src/storage/logs/.gitkeep
+
+# Local database dumps produced by database/backup.php.
+src/database/backups/
+src/storage/backups/*
+!src/storage/backups/.gitkeep
+
 # Python venv + generated commit-activity report (from test.py)
 .venv/
 commit_activity.html

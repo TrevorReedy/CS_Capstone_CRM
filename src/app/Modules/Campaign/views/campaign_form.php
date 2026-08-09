@@ -15,7 +15,7 @@ $backUrl  = $isEdit
 
 <section class="card">
 
-    <div class="module-header">
+    <div class="page-header">
         <h1><?= $isEdit ? 'Edit Campaign' : 'Create Campaign' ?></h1>
         <a href="<?= $backUrl ?>" class="btn btn-secondary">&#8592; Back</a>
     </div>

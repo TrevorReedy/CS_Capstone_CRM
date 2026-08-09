@@ -324,6 +324,24 @@ class InventoryRepository
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * Count reservations of every status for a product.
+     *
+     * The foreign key from rfq_inventory_reservations is RESTRICT, so a
+     * Released or Converted row blocks a DELETE exactly as an active one does.
+     * deleteProduct() needs this to give an accurate reason instead of letting
+     * the database raise an unhandled integrity error.
+     */
+    public function countReservations(int $productId): int
+    {
+        $db   = Database::connection();
+        $stmt = $db->prepare(
+            "SELECT COUNT(*) FROM rfq_inventory_reservations WHERE product_id = ?"
+        );
+        $stmt->execute([$productId]);
+        return (int) $stmt->fetchColumn();
+    }
+
     // ── Inventory Ledger ──────────────────────────────────────────────────────
     // Append-only audit trail (migrations/015_create_inventory_movements.sql)
     // backing the printable Inventory Ledger report: what happened to a product,
