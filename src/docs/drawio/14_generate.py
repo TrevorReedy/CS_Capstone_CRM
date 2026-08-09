@@ -140,7 +140,7 @@ box("dsh", "Dashboard", COLX[1], ROWY[1], LW, LH_LANE, LANE.format(fill, stroke)
 DSH = [
     ("DashboardController", ["+ index()"], None, 76, 68),
     ("DashboardCard  (abstract)", ["+ title()  + body()  + render()", "+ permission()  + visible()"],
-     "17 concrete cards extend it", 164, 120),
+     "19 concrete cards extend it", 164, 120),
     ("DashboardService", ["+ activeRfqSummary()  + winRateByAccount()", "+ campaignStatusBreakdown()",
                           "+ overdueCampaignSends()", "+ lowStockProducts()"], "+ 17 more", 304, 172),
     ("DashboardRepository", ["+ lowStock()  + topReserved()", "+ reservedUnits()  + heavilyReserved()"],
