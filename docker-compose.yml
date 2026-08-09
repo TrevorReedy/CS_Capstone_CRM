@@ -19,6 +19,13 @@ services:
       DB_NAME: ${DB_NAME:-typhon_cath_crm}
       DB_USER: ${DB_USER:-crm_user}
       DB_PASS: ${DB_PASS:-devonly_change_me}
+      # Used only by the integration suite (tests/IntegrationTestCase.php),
+      # which drops and rebuilds its own database on every run. DB_USER above
+      # is scoped to the application's database and cannot CREATE DATABASE —
+      # correctly so — which is why the tests need their own credentials rather
+      # than a privilege grant to the app user.
+      DB_TEST_USER: root
+      DB_TEST_PASS: ${MYSQL_ROOT_PASSWORD:-devonly_root}
     depends_on:
       db:
         condition: service_healthy

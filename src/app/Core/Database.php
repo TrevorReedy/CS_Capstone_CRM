@@ -45,4 +45,19 @@ class Database
 
         return self::$connection;
     }
+
+    /**
+     * Test seam: install a PDO for connection() to hand out, or pass null to
+     * drop the cached handle so the next call reconnects from config.
+     *
+     * Application code must not call this — it exists because connection() is a
+     * static singleton, which is what lets every repository reach the database
+     * without being handed one. That same design means a test cannot inject a
+     * handle any other way, and swapping the singleton reaches all of them at
+     * once. See tests/IntegrationTestCase.php.
+     */
+    public static function swap(?PDO $pdo): void
+    {
+        self::$connection = $pdo;
+    }
 }

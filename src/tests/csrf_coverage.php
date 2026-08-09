@@ -219,7 +219,11 @@ function comment_breakouts(string $src): array {
     return $out;
 }
 
-$allPhp = array_merge(php_files($appDir), php_files($publicDir));
+// config/ is included in the lint sweep because it is exactly the kind of file
+// nobody looks at twice: config/app.php carried an HTML comment above its
+// opening tag for months, which would have emitted output before headers the
+// moment anything required it.
+$allPhp = array_merge(php_files($appDir), php_files($publicDir), php_files($root . '/config'));
 foreach ($allPhp as $file) {
     $raw = (string)file_get_contents($file);
     $problems = [];
@@ -229,12 +233,32 @@ foreach ($allPhp as $file) {
         $problems[] = "UTF-8 BOM at start of file";
     }
 
-    // (b) Whitespace/text before the opening <?php.
+    // (b) Output before the opening <?php.
+    //
+    // Whitespace is always a bug: it is invisible, and it is emitted the instant
+    // the file is loaded, which kills any header() or session_start() that
+    // follows.
+    //
+    // Literal *text* is a bug only in files that are not templates. A view under
+    // views/ or in Shared/ opens with markup on purpose — that is the entire job
+    // of a template, and it is included long after headers are sent. Core,
+    // config and the public entry points are different: they run before or
+    // during header emission, and config/app.php sat there for months with an
+    // HTML comment above its opening tag that nobody noticed because nothing
+    // included it.
+    $isTemplate = (bool) preg_match('#/(views|Shared)/#', str_replace('\\', '/', $file));
+
     $pos = strpos($raw, '<?php');
     if ($pos === false) {
         // A .php file with no <?php is fine only if it's pure HTML; skip.
-    } elseif ($pos > 0 && trim(substr($raw, 0, $pos)) === '') {
-        $problems[] = "whitespace before opening <?php tag";
+    } elseif ($pos > 0) {
+        $before = substr($raw, 0, $pos);
+        if (trim($before) === '') {
+            $problems[] = "whitespace before opening <?php tag";
+        } elseif (!$isTemplate) {
+            $problems[] = "text before opening <?php tag (emitted as output): "
+                . json_encode(mb_substr(trim($before), 0, 80));
+        }
     }
 
     // (c) a close tag that cuts off a // or # comment and leaks PHP as output.
