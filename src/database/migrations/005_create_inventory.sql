@@ -1,2 +1,20 @@
 -- 005_create_inventory.sql
--- TODO: Move relevant statements from database/schema.sql into this migration if your team uses migrations.
+--
+-- INTENTIONALLY EMPTY. This is not an unfinished file.
+--
+-- The original tables (products, inventory, rfq_inventory_reservations) have only ever been defined in
+-- database/schema.sql. The plan recorded in the old TODO here — to move those
+-- CREATE TABLEs out of schema.sql and into 001-005 — was never carried out, and
+-- doing it now would break the chain: migrations 006 onward assume those tables
+-- already exist in their *original* shape, then alter them. Reproducing the
+-- original shape would mean reconstructing schema.sql as it stood before any of
+-- those alterations.
+--
+-- What this means in practice:
+--
+--   New database      schema.sql -> seed.sql -> indexes.sql. Never migrations/.
+--   Existing database migrations/ in filename order, starting from the last one
+--                     already applied.
+--
+-- So migrations/ is a changelog of changes *since* the original schema, not a
+-- build script. See docs/DEPLOYMENT.md.

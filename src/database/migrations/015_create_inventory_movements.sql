@@ -16,7 +16,6 @@
 -- row must survive the product being deleted or the user account being
 -- removed later, so product_name/sku and user_name are snapshotted onto the
 -- row at write time instead of being resolved via JOIN at read time.
-USE typhon_cath_crm;
 
 CREATE TABLE inventory_movements (
     id INT AUTO_INCREMENT PRIMARY KEY,

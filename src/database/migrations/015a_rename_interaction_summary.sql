@@ -1,5 +1,12 @@
--- 011_rename_interaction_summary.sql
+-- 015a_rename_interaction_summary.sql
 -- Rename interactions.summary -> interaction_subject to match code + schema.sql.
+--
+-- Numbered 015a, not 015: it previously shared the number 015 with
+-- 015_create_inventory_movements.sql, which left their apply order decided by
+-- how the filenames happened to sort rather than by anyone's intent. The two are
+-- independent, so the suffix only makes the order deterministic. It cannot move
+-- to 022 — migrations 018 and 020 reference the post-rename column name and so
+-- must run after this one.
 --
 -- Idempotent + portable: only renames if `summary` still exists, so it is safe to
 -- run whether or not the column was already renamed. Uses CHANGE (not the MySQL
