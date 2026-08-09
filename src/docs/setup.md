@@ -1,5 +1,7 @@
 # TyphonCath CRM — Local Setup Guide
 
+For deploying to the live server, see [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
 ## Prerequisites
 
 Install **Docker Desktop** for your OS:
@@ -42,7 +44,23 @@ Use the demo credentials seeded into the database:
 | Field | Value |
 |-------|-------|
 | Email | `admin@typhoncath.test` |
-| Password | *(ask Trevor — the hash in seed.sql needs replacing with a real one)* |
+| Password | `password` |
+
+> This credential is public — the bcrypt hash is in `seed.sql` and the password
+> is in the README. Fine locally. Change it before any deployment; see
+> [`HANDOFF.md`](HANDOFF.md).
+
+To exercise role-based access control, load one user per role. The seed alone
+creates only a Super Admin, and that role bypasses every permission check, so
+every page looks reachable:
+
+```bash
+docker compose exec -T db mysql -uroot -pdevonly_root typhon_cath_crm \
+  < src/database/seed_dev_users.sql
+```
+
+All five share the same demo password. Development only — never load this into a
+deployed environment.
 
 ---
 
@@ -66,7 +84,7 @@ Use the demo credentials seeded into the database:
 Something else on your machine is using port 8080. Either stop that process, or change `"8080:80"` to `"8081:80"` in `docker-compose.yml` and visit http://localhost:8081.
 
 **Port 3306 already in use**
-You have a local MySQL running. Change `"3306:3306"` to `"3307:3306"` in `docker-compose.yml`. The app will still work — that port is only for connecting with a DB client like TablePlus or DBeaver.
+You have a local MySQL running. Set `DB_HOST_PORT=3307` in a `.env` file next to `docker-compose.yml` — no need to edit the compose file itself. The app is unaffected either way; that port is only for connecting with a DB client like TablePlus or DBeaver.
 
 **Database connection error on first boot**
 The app container sometimes starts before MySQL is fully ready. Run `docker compose restart app` to fix it.
@@ -83,7 +101,10 @@ If you want to browse the database directly with TablePlus, DBeaver, or MySQL Wo
 | Setting | Value |
 |---------|-------|
 | Host | `127.0.0.1` |
-| Port | `3306` |
+| Port | `3306` (or `DB_HOST_PORT`) |
 | Database | `typhon_cath_crm` |
 | Username | `crm_user` |
-| Password | `secret` |
+| Password | `devonly_change_me` |
+
+These are the Compose defaults. Override them with a `.env` next to
+`docker-compose.yml`.

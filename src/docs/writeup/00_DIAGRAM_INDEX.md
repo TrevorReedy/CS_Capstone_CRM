@@ -1,7 +1,7 @@
 # Typhon Cath CRM Diagram Package Index
 
 Project: Typhon Cath CRM
-Source documents translated: requirements.md and requirements_clarification.txt
+Source documents translated: ../project/requirements.md and requirements_clarification.txt
 System type: Lightweight internal CRM, monolithic web application
 Stack: HTML/CSS/JavaScript/jQuery/Bootstrap frontend, PHP backend/business logic, MySQL database
 Main modules: Customer Management, RFQ/Pipeline Management, Digital Campaign Management, Inventory Management, Integration/Dashboard
