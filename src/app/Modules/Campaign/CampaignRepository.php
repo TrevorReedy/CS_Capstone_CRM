@@ -330,6 +330,65 @@ class CampaignRepository
         return $stmt->fetchAll();
     }
 
+    // Scheduled campaigns whose send time has already passed. Sends are simulated
+    // manually (there is no cron), so these are stuck until someone acts on them —
+    // the mirror image of upcomingScheduledSends, same covering index.
+    public function overdueScheduledSends(int $limit = 20): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT c.id, c.campaign_name, c.campaign_type, c.scheduled_at,
+                   DATEDIFF(NOW(), c.scheduled_at) AS days_overdue,
+                   u.name AS created_by_name
+            FROM campaigns c
+            LEFT JOIN users u ON u.id = c.created_by_user_id
+            WHERE c.status = 'Scheduled' AND c.scheduled_at < NOW()
+            ORDER BY c.scheduled_at ASC
+            LIMIT {$limit}
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    // Campaigns that have already gone out, newest first (Recent Sends card).
+    // Send time mirrors campaignMomentum's activity date: scheduled_at when the
+    // campaign was queued, else the row's last write.
+    public function recentSends(int $limit = 20): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT c.id, c.campaign_name, c.campaign_type, c.status, c.sent_count,
+                   COALESCE(c.scheduled_at, c.updated_at, c.created_at) AS sent_at,
+                   u.name AS created_by_name
+            FROM campaigns c
+            LEFT JOIN users u ON u.id = c.created_by_user_id
+            WHERE c.status IN ('Sent', 'Completed')
+            ORDER BY sent_at DESC
+            LIMIT {$limit}
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    // Drafts still being put together, oldest first so the stalest surface first.
+    // has_audience flags whether any audience row exists at all — a draft with no
+    // audience cannot go out, which is what the card badges. EXISTS stops at the
+    // first matching row and hits idx_campaign_audience_campaign_id.
+    public function draftCampaigns(int $limit = 20): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT c.id, c.campaign_name, c.campaign_type, c.created_at,
+                   DATEDIFF(NOW(), c.created_at) AS days_old,
+                   EXISTS (
+                       SELECT 1 FROM campaign_audience ca WHERE ca.campaign_id = c.id
+                   ) AS has_audience
+            FROM campaigns c
+            WHERE c.status = 'Draft'
+            ORDER BY c.created_at ASC
+            LIMIT {$limit}
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
     // Weekly campaign activity for the momentum chart — last N weeks.
     // $groupBy: 'week' (YEARWEEK buckets) or 'day' (DATE buckets) for short ranges.
     // $segment: 'all' | 'accounts' | 'contacts' — filters to campaigns with that audience type.
@@ -392,14 +451,26 @@ public function campaignMomentum(
     // Summary stats for the dashboard stat cards. Computed in a single pass over
     // campaigns (idx_campaigns_status). "active" = Scheduled or Sent — campaigns
     // that are queued to go out or in-flight, excluding Drafts and Completed.
+    //
+    // One pass feeds four cards (Active Campaigns, Status Breakdown, Total Reach,
+    // Overdue count) — DashboardService memoises the result so they share it.
+    // total_reach only counts campaigns that actually went out; a Draft or
+    // Scheduled row's sent_count is 0 but should not be treated as reach either.
     public function dashboardStats(): array
     {
         $stmt = $this->db->prepare("
             SELECT
                 COUNT(*) AS total,
+                SUM(status = 'Draft')     AS draft,
                 SUM(status = 'Scheduled') AS scheduled,
+                SUM(status = 'Sent')      AS sent,
+                SUM(status = 'Completed') AS completed,
                 SUM(status IN ('Scheduled','Sent')) AS active,
-                SUM(status IN ('Sent','Completed')) AS sent_completed
+                SUM(status IN ('Sent','Completed')) AS sent_completed,
+                COALESCE(
+                    SUM(CASE WHEN status IN ('Sent','Completed') THEN sent_count END), 0
+                ) AS total_reach,
+                SUM(status = 'Scheduled' AND scheduled_at < NOW()) AS overdue
             FROM campaigns
         ");
         $stmt->execute();

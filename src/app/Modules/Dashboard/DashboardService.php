@@ -14,7 +14,7 @@ use App\Modules\Campaign\CampaignRepository;
  * narrowly-scoped repository method, and the service reshapes/labels the result
  * for the cards. It never writes SQL itself and never duplicates RFQ or Campaign
  * business logic — it composes the two module repositories and shares one
- * campaign-stats read across the two campaign cards.
+ * campaign-stats read across every campaign stat card.
  */
 class DashboardService
 {
@@ -38,7 +38,7 @@ class DashboardService
     private CampaignRepository $campaign;
     private DashboardRepository $dashboard;
 
-    /** Memoised single read of campaign summary stats (shared by two cards). */
+    /** Memoised single read of campaign summary stats (shared by four cards). */
     private ?array $campaignStats = null;
 
     public function __construct(
@@ -101,6 +101,69 @@ class DashboardService
     public function upcomingCampaignSends(int $limit = 5): array
     {
         return $this->campaign->upcomingScheduledSends($limit);
+    }
+
+    /**
+     * Campaign count per status, in workflow order (Campaign Status card).
+     * Reshaped from the shared stats read — no extra query.
+     *
+     * @return array<int, array{status:string, count:int}>
+     */
+    public function campaignStatusBreakdown(): array
+    {
+        $stats = $this->campaignStats();
+        $rows  = [];
+
+        foreach (CampaignRepository::$statuses as $status) {
+            $rows[] = [
+                'status' => $status,
+                'count'  => (int)($stats[strtolower($status)] ?? 0),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** Total campaigns on record, all statuses (denominator for the status shares). */
+    public function totalCampaignCount(): int
+    {
+        return (int)($this->campaignStats()['total'] ?? 0);
+    }
+
+    /** Recipients reached across every campaign that has gone out (Total Reach card). */
+    public function campaignTotalReach(): int
+    {
+        return (int)($this->campaignStats()['total_reach'] ?? 0);
+    }
+
+    /** How many campaigns that reach is spread across (Total Reach sub-line). */
+    public function sentCampaignCount(): int
+    {
+        return (int)($this->campaignStats()['sent_completed'] ?? 0);
+    }
+
+    /** Scheduled campaigns whose send time has passed (Overdue Sends card). */
+    public function overdueCampaignSends(int $limit = 5): array
+    {
+        return $this->campaign->overdueScheduledSends($limit);
+    }
+
+    /** Total overdue count, so the card can say how many it truncated. */
+    public function overdueCampaignCount(): int
+    {
+        return (int)($this->campaignStats()['overdue'] ?? 0);
+    }
+
+    /** Campaigns that have already gone out, newest first (Recent Sends card). */
+    public function recentCampaignSends(int $limit = 5): array
+    {
+        return $this->campaign->recentSends($limit);
+    }
+
+    /** Drafts still in progress, oldest first, flagged for audience (Drafts card). */
+    public function draftCampaigns(int $limit = 5): array
+    {
+        return $this->campaign->draftCampaigns($limit);
     }
 
     // ── Inventory ─────────────────────────────────────────────────────────────

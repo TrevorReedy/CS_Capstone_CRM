@@ -159,6 +159,17 @@ abstract class DashboardCard
         ][$stage] ?? 'rfq-badge-neutral';
     }
 
+    /** Maps a campaign status to its rfq-badge-* CSS class (shared by campaign cards). */
+    protected function campaignStatusBadgeClass(string $status): string
+    {
+        return [
+            'Draft'     => 'rfq-badge-neutral',
+            'Scheduled' => 'rfq-badge-info',
+            'Sent'      => 'rfq-badge-quoted',
+            'Completed' => 'rfq-badge-success',
+        ][$status] ?? 'rfq-badge-neutral';
+    }
+
     /** Compact money formatting for stat/preview values: 1234.5 → "$1,235". */
     protected function money(float|int|string $amount): string
     {

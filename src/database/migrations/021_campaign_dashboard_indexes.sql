@@ -1,0 +1,52 @@
+-- 021_campaign_dashboard_indexes.sql
+-- Indexes for the expanded Campaigns section of the dashboard (Status Breakdown,
+-- Total Reach, Overdue Sends, Recent Sends, Drafts in Progress).
+--
+-- Same convention as 014/017/018: names match database/indexes.sql, and re-running
+-- reports duplicate-key errors that the migration runner treats as benign.
+--
+-- Query → index:
+--
+--   CampaignRepository::dashboardStats  -> idx_campaigns_stats_cover
+--       SELECT COUNT(*), SUM(status = ...), SUM(sent_count), SUM(scheduled_at < NOW())
+--       FROM campaigns
+--   This aggregate has no WHERE — it is one pass over the table by design, and it
+--   now feeds four cards instead of one. It used to read only `status`, so
+--   idx_campaigns_status covered it outright; adding scheduled_at and sent_count
+--   to the SELECT list pushed it into a full row scan. The composite
+--   (status, scheduled_at, sent_count) restores a covering index: every column
+--   the aggregate touches lives in the index, so InnoDB never reads table rows.
+--
+--   CampaignRepository::draftCampaigns  -> idx_campaigns_status_created_at
+--       WHERE status = 'Draft' ORDER BY created_at ASC LIMIT n
+--   idx_campaigns_created_at_status already exists but leads with created_at, so
+--   it cannot serve an equality match on status; the leading column has to be the
+--   one being filtered. With (status, created_at) the ORDER BY ... LIMIT becomes
+--   an index walk instead of a filesort over every draft.
+--
+-- Already covered — no new index needed:
+--
+--   CampaignRepository::overdueScheduledSends
+--       WHERE status = 'Scheduled' AND scheduled_at < NOW() ORDER BY scheduled_at
+--   idx_campaigns_status_scheduled_at (from 014) covers the filter and the sort.
+--   It is the mirror of upcomingScheduledSends and uses the same index.
+--
+--   The EXISTS subquery in draftCampaigns
+--       SELECT 1 FROM campaign_audience WHERE campaign_id = c.id
+--   hits idx_campaign_audience_campaign_id and stops at the first matching row.
+--
+-- Not indexable (documented, accepted at project scale):
+--
+--   CampaignRepository::recentSends
+--       WHERE status IN ('Sent','Completed')
+--       ORDER BY COALESCE(scheduled_at, updated_at, created_at) DESC LIMIT n
+--   idx_campaigns_status narrows the WHERE, but the sort key is a computed
+--   expression, so THAT sort stays a filesort — the same trade-off already
+--   accepted for campaignMomentum's identical activity-date expression and for
+--   winRateByAccount's computed ORDER BY (see 018). Acceptable here because the
+--   filter admits only sent campaigns and the result is capped at LIMIT 5.
+--   Avoiding it would mean either a functional index on the exact COALESCE
+--   expression or a stored send_at column; neither is worth it at this scale.
+
+CREATE INDEX idx_campaigns_stats_cover       ON campaigns(status, scheduled_at, sent_count);
+CREATE INDEX idx_campaigns_status_created_at ON campaigns(status, created_at);

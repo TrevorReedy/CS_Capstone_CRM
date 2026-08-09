@@ -46,7 +46,12 @@ class DashboardController
             ],
             'Campaigns' => [
                 new Cards\ActiveCampaignsCard($this->service),
+                new Cards\CampaignReachCard($this->service),
+                new Cards\CampaignStatusCard($this->service),
                 new Cards\UpcomingCampaignSendsCard($this->service),
+                new Cards\OverdueCampaignSendsCard($this->service),
+                new Cards\RecentCampaignSendsCard($this->service),
+                new Cards\DraftCampaignsCard($this->service),
             ],
             'Customers' => [
                 new Cards\TotalAccountsCard($this->service),

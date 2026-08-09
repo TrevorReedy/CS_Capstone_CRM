@@ -80,3 +80,10 @@ CREATE INDEX idx_campaign_audience_campaign_contact ON campaign_audience(campaig
 CREATE INDEX idx_interactions_interaction_date ON interactions(interaction_date);
 -- Win Rate by Account aggregation.
 CREATE INDEX idx_rfqs_account_stage ON rfqs(account_id, stage);
+-- dashboardStats: covering index for the single-pass aggregate that feeds the
+-- Active / Status Breakdown / Total Reach / Overdue cards. Every column the
+-- aggregate reads is in the index, so it never touches table rows.
+CREATE INDEX idx_campaigns_stats_cover ON campaigns(status, scheduled_at, sent_count);
+-- draftCampaigns: WHERE status='Draft' ORDER BY created_at. Leads with status so
+-- the equality match is usable (idx_campaigns_created_at_status leads the other way).
+CREATE INDEX idx_campaigns_status_created_at ON campaigns(status, created_at);
