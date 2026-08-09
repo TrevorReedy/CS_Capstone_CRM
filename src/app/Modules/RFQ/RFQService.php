@@ -164,18 +164,54 @@ class RFQService
      */
     public function changeStage(int $rfqId, string $stage): void
     {
-        $this->repo->updateStage($rfqId, $stage);
+        // Winning an RFQ is one business event that writes to three tables: the
+        // RFQ's stage, every reservation on it, and the inventory those
+        // reservations hold. Applied separately, a failure partway through a
+        // multi-product RFQ left it marked Won with some products sold and
+        // others still held — and because the stage had already been written,
+        // nothing would ever revisit the stragglers.
+        $this->transactional(function () use ($rfqId, $stage) {
+            $this->repo->updateStage($rfqId, $stage);
 
-        if (strcasecmp($stage, 'Won') === 0) {
-            $this->convertReservationsToSold($rfqId);
+            if (strcasecmp($stage, 'Won') === 0) {
+                $this->convertReservationsToSold($rfqId);
+            }
+        });
+    }
+
+    /**
+     * Run $work inside a single database transaction, joining an open one
+     * rather than nesting. Mirrors InventoryService::transactional().
+     *
+     * @template T
+     * @param callable():T $work
+     * @return T
+     */
+    private function transactional(callable $work): mixed
+    {
+        $db = \App\Core\Database::connection();
+
+        if ($db->inTransaction()) {
+            return $work();
+        }
+
+        $db->beginTransaction();
+        try {
+            $result = $work();
+            $db->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
         }
     }
 
     /**
      * Convert all of an RFQ's active (Reserved) reservations to sold.
      * Each transition is applied via the repository, which decrements the
-     * product's reserved_quantity transactionally and skips any reservation
-     * that is no longer Reserved.
+     * product's reserved_quantity and skips any reservation that is no longer
+     * Reserved. Called inside the caller's transaction, so all of them land or
+     * none do.
      */
     private function convertReservationsToSold(int $rfqId): void
     {

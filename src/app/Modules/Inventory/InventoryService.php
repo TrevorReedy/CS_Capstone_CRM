@@ -173,8 +173,17 @@ class InventoryService
 
     /**
      * Business rule: delete a product.
-     * Blocked if the product has active (Reserved) reservations —
-     * those must be released or converted first.
+     *
+     * Blocked while any reservation still references it — not only the active
+     * ones. rfq_inventory_reservations.product_id is a RESTRICT foreign key, so
+     * a Released or Converted row blocks the DELETE just as firmly as a Reserved
+     * one. Checking only the active ones produced a guard whose own advice
+     * ("release or convert them first") could not be followed: doing exactly
+     * that still failed, with an unhandled PDOException instead of this message.
+     *
+     * The two cases get different messages because they need different actions —
+     * an active reservation can be released, whereas a historical one is a
+     * permanent link to an RFQ and the product has to stay.
      */
     public function deleteProduct(int $id, ?int $userId = null): bool
     {
@@ -186,10 +195,25 @@ class InventoryService
             );
         }
 
-        // Log before deleting: logMovement snapshots product_name/sku by
-        // reading the product row, which won't exist once delete() runs.
-        $this->repo->logMovement($id, $userId, 'deleted', null, 'Product deleted.');
-        return $this->repo->delete($id);
+        $historical = $this->repo->countReservations($id);
+        if ($historical > 0) {
+            throw new \RuntimeException(
+                "Cannot delete — this product is referenced by {$historical} past " .
+                "reservation(s) on existing RFQs. Deleting it would erase that history."
+            );
+        }
+
+        // logMovement has to run first, because it snapshots product_name/sku by
+        // reading the product row and that row is gone once delete() succeeds.
+        // Wrapping both means a delete that still fails — a foreign key this
+        // method does not know about — takes the ledger entry down with it,
+        // rather than leaving the one audit trail this application has claiming
+        // a product was deleted while it is still there.
+        return $this->transactional(function () use ($id, $userId) {
+            $this->repo->logMovement($id, $userId, 'deleted', null, 'Product deleted.');
+
+            return $this->repo->delete($id);
+        });
     }
 
     /**

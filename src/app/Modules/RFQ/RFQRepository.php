@@ -342,8 +342,11 @@ class RFQRepository
             $rfqId,
             (float)$data['quote_amount'],
             isset($data['discount']) && $data['discount'] !== '' ? (float)$data['discount'] : 0,
-            $data['validity_start_date'] !== '' ? $data['validity_start_date'] : null,
-            $data['validity_end_date']   !== '' ? $data['validity_end_date']   : null,
+            // The validity window is optional — validateQuoteInput() only
+            // compares the dates when both are present — so a quote saved
+            // without them must not depend on the keys existing.
+            ($data['validity_start_date'] ?? '') !== '' ? $data['validity_start_date'] : null,
+            ($data['validity_end_date']   ?? '') !== '' ? $data['validity_end_date']   : null,
         ]);
         return (int)$this->db->lastInsertId();
     }
@@ -436,8 +439,11 @@ class RFQRepository
         $stmt->execute([
             (float)$data['quote_amount'],
             isset($data['discount']) && $data['discount'] !== '' ? (float)$data['discount'] : 0,
-            $data['validity_start_date'] !== '' ? $data['validity_start_date'] : null,
-            $data['validity_end_date']   !== '' ? $data['validity_end_date']   : null,
+            // The validity window is optional — validateQuoteInput() only
+            // compares the dates when both are present — so a quote saved
+            // without them must not depend on the keys existing.
+            ($data['validity_start_date'] ?? '') !== '' ? $data['validity_start_date'] : null,
+            ($data['validity_end_date']   ?? '') !== '' ? $data['validity_end_date']   : null,
             $id,
         ]);
     }
@@ -456,7 +462,17 @@ class RFQRepository
         $valid = ['Reserved', 'Released', 'Converted'];
         if (!in_array($status, $valid, true)) return;
 
-        $this->db->beginTransaction();
+        // Join an open transaction rather than opening a second one. A caller
+        // that converts several reservations as one unit — RFQService::
+        // changeStage() winning a multi-product RFQ — wraps the whole loop, and
+        // an unconditional beginTransaction() here made that impossible:
+        // PDO throws "There is already an active transaction". Same guard as
+        // InventoryService::transactional().
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
+
         try {
             $stmt = $this->db->prepare(
                 "SELECT product_id, quantity_reserved, reservation_status FROM rfq_inventory_reservations WHERE id = ? FOR UPDATE"
@@ -464,8 +480,13 @@ class RFQRepository
             $stmt->execute([$id]);
             $row = $stmt->fetch();
 
+            // Already terminal, or gone: nothing to do. Nothing has been written
+            // yet, so when the transaction belongs to a caller we must return
+            // without touching it — rolling back here would discard their work.
             if (!$row || $row['reservation_status'] !== 'Reserved') {
-                $this->db->rollBack();
+                if ($ownsTransaction) {
+                    $this->db->rollBack();
+                }
                 return;
             }
 
@@ -499,9 +520,13 @@ class RFQRepository
                 ($status === 'Released' ? 'Released from' : 'Converted for') . " reservation #{$id}."
             );
 
-            $this->db->commit();
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
         } catch (\Throwable $e) {
-            $this->db->rollBack();
+            if ($ownsTransaction) {
+                $this->db->rollBack();
+            }
             throw $e;
         }
     }
