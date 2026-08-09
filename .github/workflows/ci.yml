@@ -1,0 +1,323 @@
+name: CI
+
+# Runs on every push and on pull requests into main. The four test jobs use no
+# secrets, so they work for forks and for contributors without repository
+# access. The deploy job at the bottom does use secrets, and only ever runs on
+# main — see the comment above it.
+#
+# Deploy lives in this file rather than its own so that it can declare
+# `needs: [lint, static, unit, integration]`. As two separate workflows on the
+# same trigger they started simultaneously and the upload raced the tests: the
+# deploy could finish first and put a commit on the live site that CI was in the
+# middle of failing.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Deploy: list what would change without uploading anything'
+        type: boolean
+        default: false
+
+# A second push to the same branch cancels the first — nobody needs the results
+# of a commit that has already been replaced. The deploy job opts out of this;
+# a half-finished mirror is not something to cancel.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The application requires PHP 8.2 (composer.json). Bluehost's PHP selector
+  # must be set to the same version — see docs/DEPLOYMENT.md.
+  PHP_VERSION: '8.2'
+
+jobs:
+  lint:
+    name: Syntax and manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+
+      # A parse error in any file is a 500 on the page that includes it, and
+      # `php -l` catches it in a second without a database or a browser.
+      - name: Lint every PHP file
+        working-directory: src
+        run: |
+          find app public config tests database -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+      - name: Validate composer.json against composer.lock
+        working-directory: src
+        run: composer validate --strict
+
+  static:
+    name: CSRF and authorization wiring
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+
+      # These two predate the PHPUnit suite and cover something it cannot: they
+      # walk every entry point in public/ and assert the wiring is present, so a
+      # brand-new page that forgets Csrf::field() or a permission gate fails here
+      # rather than in a code review nobody ran.
+      - name: Every POST form and handler is CSRF-protected
+        working-directory: src
+        run: php tests/csrf_coverage.php
+
+      - name: Every endpoint is permission-gated
+        working-directory: src
+        run: php tests/authz_coverage.php
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, dom, pdo
+          coverage: none
+
+      - name: Install dependencies
+        working-directory: src
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run the unit suite
+        working-directory: src
+        run: vendor/bin/phpunit --testsuite unit
+
+  integration:
+    name: Integration tests (MySQL 8)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_password
+        ports:
+          - 3306:3306
+        # Without the health check the job races the container: MySQL accepts
+        # TCP connections a few seconds before it will accept a login.
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_root_password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: typhon_cath_crm_test
+      DB_USER: root
+      DB_PASS: ci_root_password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, dom, pdo, pdo_mysql
+          coverage: none
+
+      - name: Install dependencies
+        working-directory: src
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      # config/database.php is listed in .gitignore, but it was committed before
+      # that rule existed and is therefore still tracked and present in a fresh
+      # checkout. Overwriting it with the example is deliberate rather than
+      # merely defensive: it makes CI independent of whatever that tracked copy
+      # happens to contain. Both files read the DB_* variables set above.
+      - name: Provide the database config
+        working-directory: src
+        run: cp config/database.example.php config/database.php
+
+      # tests/IntegrationTestCase.php drops and rebuilds the database from
+      # schema.sql, seed.sql, indexes.sql and seed_dev_users.sql on first use,
+      # so there is nothing to import here. It will only ever drop a database
+      # whose name ends in _test, which is why DB_NAME above is spelled that way.
+      - name: Run the integration suite
+        working-directory: src
+        run: vendor/bin/phpunit --testsuite integration
+
+  # ── Deployment ──────────────────────────────────────────────────────────────
+  #
+  # Replaces the manual FileZilla drag. Two things this does that dragging src/
+  # cannot:
+  #
+  #   1. It builds vendor/ first. dompdf is a hard runtime dependency and vendor/
+  #      is a gitignored build artifact, so a plain mirror of the repository
+  #      produces a site whose PDF exports fatal on the first request.
+  #   2. It never touches server-owned files — .env, config/database.php,
+  #      public/uploads/ and the logs stay exactly as they are (see EXCLUDES).
+  #
+  # No third-party actions are used. The transfer is lftp, which ships in Ubuntu,
+  # driven directly — so the only things handling the FTP credentials are the
+  # GitHub runner and lftp itself. The two `actions/*` and `shivammathur/setup-php`
+  # steps are first-party GitHub and the standard PHP setup action respectively,
+  # and neither is given the deployment secrets.
+  #
+  # Required repository secrets (Settings -> Secrets and variables -> Actions):
+  #
+  #   FTP_HOST        e.g. ftp.yourdomain.com
+  #   FTP_USERNAME    the cPanel FTP account
+  #   FTP_PASSWORD    that account's password
+  #   FTP_SERVER_DIR  path to the directory that CONTAINS public/, with a
+  #                   trailing slash — e.g. /typhoncath/
+  #
+  # FTP_SERVER_DIR is not public_html. The document root points at the app's
+  # public/ directory, so app/, config/ and database/ live one level above the web
+  # root where nothing can request them. See docs/DEPLOYMENT.md.
+  deploy:
+    name: Deploy to Bluehost
+    runs-on: ubuntu-latest
+
+    # The gate. Nothing reaches the live site until all four jobs above pass.
+    needs: [lint, static, unit, integration]
+
+    # Automatic on main. Manual runs are allowed off main only as dry runs, so
+    # that "test the pipeline from my branch" cannot become "publish my branch".
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.ref == 'refs/heads/main' || inputs.dry_run))
+
+    # Overrides the workflow-level cancel-in-progress. Cancelling a running
+    # `mirror --delete` leaves the live site half-updated, so a second push
+    # queues behind this one instead of killing it.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    # Lets you require a reviewer before anything reaches the live site:
+    # Settings -> Environments -> production -> Required reviewers.
+    environment:
+      name: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, dom, pdo, pdo_mysql
+          coverage: none
+
+      # --no-dev keeps PHPUnit and its ~30 transitive packages off the server.
+      # --optimize-autoloader builds a classmap, since there is no opcache
+      # priming on shared hosting.
+      - name: Build production dependencies
+        working-directory: src
+        run: composer install --no-dev --optimize-autoloader --no-progress --no-interaction
+
+      # Cheap insurance: if the build produced something that cannot even parse,
+      # do not put it on the live site.
+      - name: Sanity-check the build
+        working-directory: src
+        run: |
+          test -f vendor/autoload.php || { echo 'vendor/autoload.php missing'; exit 1; }
+          test -d vendor/dompdf      || { echo 'dompdf missing — PDF export would fatal'; exit 1; }
+          php -l public/index.php
+
+      - name: Install lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Upload over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          # Read by lftp itself via --env-password, so the password is never an
+          # argument (visible in the process list) nor part of a script body.
+          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          set -euo pipefail   # never set -x here: it would echo the script
+
+          # ── THIS LIST IS LOAD-BEARING ──────────────────────────────────────
+          # `mirror --delete` removes anything on the server that is absent
+          # locally. Every pattern is either a server-owned file that must
+          # survive a deploy, or something with no business on a public host.
+          #
+          # These are POSIX regexes (lftp -x), matched against the path relative
+          # to the directory being mirrored. Directories carry a trailing slash,
+          # which is why the directory patterns end in `/`.
+          EXCLUDES=(
+            # VCS and editor noise
+            -x '(^|/)\.git'
+            -x '(^|/)\.DS_Store$'
+            -x '^node_modules/'
+
+            # Server-owned configuration. .env is gitignored and absent from the
+            # checkout; config/database.php is tracked, so excluding it is what
+            # stops the repository's copy overwriting the server's real
+            # credentials — and stops --delete removing either one.
+            -x '^\.env$'
+            -x '^config/database\.php$'
+
+            # User data. Deleting public/uploads/ destroys every uploaded
+            # file, and none of it is recoverable from git.
+            -x '^public/uploads/'
+
+            # Runtime state the application writes on the server.
+            -x '^storage/logs/'
+            -x '^storage/backups/'
+            -x '^storage/cache/'
+            -x '^database/backups/'
+
+            # Not needed at runtime, and some of it leaks information:
+            # seed_dev_users.sql creates five accounts sharing one public
+            # password, and docs/ describes the deployment itself.
+            -x '^tests/'
+            -x '^docs/'
+            -x '^phpunit\.xml$'
+            -x '^\.phpunit\.cache/'
+            -x '^composer\.json$'
+            -x '^composer\.lock$'
+            -x '^database/seed_dev_users\.sql$'
+          )
+
+          # Settings, then the transfer, as one ';'-separated command list.
+          # ${EXCLUDES[*]@Q} emits each pattern individually shell-quoted, which
+          # is what keeps the regexes intact through lftp's own parser.
+          SETTINGS="set cmd:fail-exit true;
+                    set ftp:ssl-force true;
+                    set ftp:ssl-protect-data true;
+                    set ssl:verify-certificate true;
+                    set net:max-retries 3;
+                    set net:timeout 20;
+                    set mirror:parallel-transfer-count 3"
+
+          MIRROR="mirror --reverse --delete --verbose --no-perms ${DRY_RUN} \
+                  ${EXCLUDES[*]@Q} ./src/ ${FTP_SERVER_DIR@Q}"
+
+          lftp --env-password -u "$FTP_USERNAME" "ftps://$FTP_HOST" \
+               -e "${SETTINGS}; ${MIRROR}; bye"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed to Bluehost"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Dry run: \`${{ inputs.dry_run || false }}\`"
+            echo ""
+            echo "Verify: log in, open an RFQ and export its PDF (that exercises the vendor/ build)."
+          } >> "$GITHUB_STEP_SUMMARY"

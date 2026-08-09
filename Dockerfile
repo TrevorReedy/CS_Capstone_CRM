@@ -7,6 +7,18 @@ FROM php:8.2-apache
 # built-in extension fails the build.
 RUN docker-php-ext-install pdo pdo_mysql
 
+# Composer, so `docker compose exec app composer test` works and nobody has to
+# install PHP 8.2 on the host just to run the suite. Copied from the official
+# image rather than curl'd, so the version is pinned and the download is not an
+# unverified script piped into php.
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# git and unzip let Composer install from source and extract dist archives;
+# without them it falls back to slower paths and warns on every run.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git unzip default-mysql-client \
+ && rm -rf /var/lib/apt/lists/*
+
 # Point Apache at the public directory, and allow the .htaccess in there to take
 # effect. Without AllowOverride the file is parsed by nobody: its rules blocking
 # error_log/.env/*.sql from being served silently do nothing.
