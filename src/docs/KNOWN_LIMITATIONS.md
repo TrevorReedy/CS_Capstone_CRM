@@ -82,7 +82,7 @@ What exists, and runs in CI on every push:
 - **217 PHPUnit tests** (`composer test`) — a unit suite that needs nothing, and
   an integration suite against a real MySQL 8 loaded from `schema.sql`,
   `seed.sql` and `indexes.sql`.
-- **`csrf_coverage.php` (185 checks) and `authz_coverage.php` (111 checks)** —
+- **`csrf_coverage.php` (198 checks) and `authz_coverage.php` (111 checks)** —
   static harnesses that read source rather than exercising a running app. They
   cover what the PHPUnit suite cannot: that *every* entry point is CSRF-
   protected and permission-gated, including ones nobody wrote a test for.

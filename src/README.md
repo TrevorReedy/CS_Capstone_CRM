@@ -1,59 +1,37 @@
-# Typhon Cath CRM
+# `src/` — the application
 
-A modular PHP/MySQL CRM project for Typhon Cath.
+This directory is the application itself. Everything above it (`docker-compose.yml`,
+`Dockerfile`, `.github/`) is tooling for running and shipping it.
 
-## Project Structure
+**The project README is one level up: [`../README.md`](../README.md)** — what the
+system is, how to run it, how the architecture fits together, and how CI/CD
+works. Documentation index: [`docs/README.md`](docs/README.md).
 
-This repo uses a modular PHP monolith structure:
+## Layout
 
-- `public/` is the only web-accessible directory.
-- `app/Core/` contains shared application logic.
-- `app/Modules/` contains student-owned CRM modules.
-- `config/` contains app/database configuration.
-- `database/` contains schema, seed data, indexes, and migrations.
-- `docs/` contains FP documentation and diagrams.
-- `storage/` contains logs and backups.
+| | |
+|---|---|
+| `public/` | **The document root** — the only web-accessible directory. One PHP file per URL |
+| `app/Core/` | Auth, database, permissions, CSRF, pagination, DataTable, PDF |
+| `app/Middleware/` | Auth and CSRF guards, included per entry point |
+| `app/Modules/` | The CRM modules: Customer, RFQ, Campaign, Inventory, Dashboard, Admin |
+| `app/Shared/` | Layout partials — header, sidebar, footer, 403 |
+| `config/` | `database.php` — **server-only, never committed** |
+| `database/` | `schema.sql`, `seed.sql`, `indexes.sql`, `migrations/`, backup and restore scripts |
+| `docs/` | All project documentation |
+| `storage/` | Logs and backups. Not web-accessible |
+| `tests/` | PHPUnit suites, the CSRF and authorization static harnesses, manual test plans |
 
-## Student Ownership
+`app/`, `config/`, `database/` and `storage/` must sit outside the web root — see
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-| Student | Module | Folder |
-|---|---|---|
-| Max | Customer Management | `app/Modules/Customer/` |
-| Trevor | RFQ / Pipeline Management | `app/Modules/RFQ/` |
-| Jonah | Digital Campaign Management | `app/Modules/Campaign/` |
-| Casey | Inventory Management | `app/Modules/Inventory/` |
-| All | Dashboard, Admin, Integration, Auth | `app/Modules/Dashboard/`, `app/Modules/Admin/`, `app/Core/` |
+## Running the tests
 
-## Basic Request Flow
-
-Example: creating an RFQ.
-
-```text
-User submits Create RFQ form
-        ↓
-RFQController.php receives request
-        ↓
-RFQService.php validates business rules
-        ↓
-RFQRepository.php inserts/updates MySQL
-        ↓
-DashboardService.php can read updated metrics
-        ↓
-User redirects to RFQ detail or pipeline board
+```bash
+docker compose exec app composer test        # static harnesses + full PHPUnit suite
+docker compose exec app composer test:unit   # no database
+docker compose exec app composer lint        # php -l over everything
 ```
 
-## Setup Notes
-
-1. Copy `.env.example` to `.env`.
-2. Create a MySQL database.
-3. Import `database/schema.sql`.
-4. Import `database/seed.sql`.
-5. Configure your local web server so `/public` is the document root.
-6. Visit `/login.php`.
-
-## Security Notes
-
-- Do not expose `/app`, `/config`, `/database`, `/storage`, or `/docs` through the web server.
-- Use password hashing for user passwords.
-- Use sessions and role-based access checks for protected pages.
-- Use prepared statements for SQL queries.
+Composer runs inside the container because the app requires PHP 8.2. See
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md).

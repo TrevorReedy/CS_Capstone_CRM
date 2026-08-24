@@ -150,29 +150,31 @@ Optionally add a manual gate: **Settings** → **Environments** → `production`
 
 ### Automatic
 
-Any push to `main` deploys.
+Any push to `main` deploys — **but only after CI passes.** Deploy is a job in
+`.github/workflows/ci.yml` (there is no second workflow) and it declares
+`needs: [lint, static, unit, integration]`, so a red test run stops it. It is
+also pinned to the `production` environment and to a `deploy-production`
+concurrency group that does not cancel in progress: a second push queues behind
+a running deploy rather than killing it half-way through a `mirror --delete`.
 
-> **CI and deploy are separate workflows, and both fire on the same push.** They
-> run in parallel — the deploy does **not** wait for the tests, and a red CI run
-> does not stop it. Two ways to close that, either of which can be turned on in
-> repository settings without touching the workflow files:
+> Two optional gates on top, both settable in repository settings without
+> touching the workflow:
 >
 > - **Branch protection** (Settings → Branches → `main`): require the four CI
->   checks to pass before a pull request can merge. Anything reaching `main`
->   through a PR has then passed CI. A direct push to `main` still bypasses it,
->   so pair this with "do not allow bypassing".
+>   checks before a pull request can merge, and pair it with "do not allow
+>   bypassing" so a direct push to `main` cannot skip review.
 > - **A required reviewer** (Settings → Environments → `production`): the deploy
 >   job already targets that environment, so adding a reviewer makes every
 >   deploy wait for a human.
->
-> To make the dependency automatic instead, move the deploy job into `ci.yml`
-> with `needs: [lint, static, unit, integration]` and a
-> `if: github.ref == 'refs/heads/main'` guard.
 
 ### Manual
 
-Actions → **Deploy to Bluehost** → **Run workflow**. Tick **dry run** to see
-what would change without uploading anything.
+Actions → **CI** → **Run workflow**, with the **dry run** tick-box to see what
+would change without uploading anything.
+
+Run from `main`, this deploys for real (unless you tick dry run). Run from any
+other branch, it is **only** ever allowed as a dry run — so "test the pipeline
+from my branch" cannot become "publish my branch".
 
 ### The first deploy must be a dry run
 
